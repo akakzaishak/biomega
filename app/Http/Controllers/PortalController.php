@@ -451,20 +451,15 @@ class PortalController extends Controller
             if ($orderId === '' || $dpPhone === '') {
                 $error = 'Please select a delivery person.';
             } else {
-                $existing = DB::table('asined_order')->where('order_id', $orderId)->first();
+                $wasAssigned = DB::table('asined_order')->where('order_id', $orderId)->exists();
+                $assigned = $this->portal->assignDeliveryPersonToOrder($orderId, $pharmacyId !== '' ? $pharmacyId : null, $dpPhone);
 
-                if ($existing) {
-                    DB::table('asined_order')->where('order_id', $orderId)->update([
-                        'deliveryperson_id' => $dpPhone,
-                    ]);
-                    $success = "Order <strong>#{$orderId}</strong> reassigned successfully.";
+                if ($assigned) {
+                    $success = $wasAssigned
+                        ? "Order <strong>#{$orderId}</strong> reassigned successfully."
+                        : "Order <strong>#{$orderId}</strong> assigned successfully.";
                 } else {
-                    DB::table('asined_order')->insert([
-                        'order_id' => $orderId,
-                        'pharmacy_id' => $pharmacyId,
-                        'deliveryperson_id' => $dpPhone,
-                    ]);
-                    $success = "Order <strong>#{$orderId}</strong> assigned successfully.";
+                    $error = 'Could not assign delivery person.';
                 }
             }
         }
@@ -476,11 +471,9 @@ class PortalController extends Controller
             if ($orderId === '' || $amount < 0) {
                 $error = 'Invalid amount.';
             } else {
-                $updated = DB::table('order')->where('Tracking', $orderId)->update([
-                    'otalAmount' => $amount,
-                ]);
+                $updated = $this->portal->updateOrderAmount($orderId, $amount);
 
-                if ($updated !== false) {
+                if ($updated) {
                     $success = "Amount updated for order <strong>#{$orderId}</strong>.";
                 } else {
                     $error = 'Failed to update amount.';
