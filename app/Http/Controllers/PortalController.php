@@ -707,10 +707,11 @@ class PortalController extends Controller
             }
         }
 
-        return view('portal.role', array_merge([
+        return view('portal.pharmacy.dashboard', array_merge([
             'page' => 'pharmacy',
             'userName' => $this->userName('Pharmacy'),
-        ], $data, ['ordersEnriched' => $orders]));
+            'pharmacyName' => $this->userName('Pharmacy'),
+        ], $data, ['orders' => $orders]));
     }
 
     public function stockDashboard(Request $request)
