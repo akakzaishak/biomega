@@ -697,7 +697,7 @@ class PortalController extends Controller
 
             try {
                 $tracking = $this->portal->createStockOrder($payload);
-                return redirect()->route('pharmacy.dashboard')->with('success', "Order $tracking created successfully.");
+                return redirect()->route('pharmacy.dashboard', ['section' => 'orders'])->with('success', "Order $tracking created successfully.");
             } catch (\Throwable $e) {
                 return back()->withInput()->with('error', 'Could not create the order.');
             }

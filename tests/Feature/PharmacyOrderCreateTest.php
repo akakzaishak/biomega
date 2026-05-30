@@ -42,7 +42,7 @@ class PharmacyOrderCreateTest extends TestCase
             'is_urgent' => 1,
         ]);
 
-        $response->assertRedirect(route('pharmacy.dashboard'));
+        $response->assertRedirect(route('pharmacy.dashboard', ['section' => 'orders']));
 
         $order = Order::first();
         $this->assertNotNull($order);

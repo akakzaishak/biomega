@@ -3,6 +3,7 @@
     $orders = $orders ?? [];
     $products = $products ?? [];
   $medicineSuggestions = $medicineSuggestions ?? [];
+    $initialSection = request()->query('section', 'overview');
     $totalOrders = $totalOrders ?? count($orders);
     $pendingOrders = $pendingOrders ?? count(array_filter($orders, fn($o) => in_array($o['status'] ?? '', ['PENDING_COMMERCIAL_REVIEW'])));
     $activeOrders = $activeOrders ?? count(array_filter($orders, fn($o) => in_array($o['status'] ?? '', ['COMMERCIALLY_CONFIRMED','READY_FOR_DISPATCH','ASSIGNED_TO_DELIVERY','PICKED_UP','IN_TRANSIT'])));
@@ -663,6 +664,8 @@
 </div>
 
 <script>
+const initialSection = @js($initialSection);
+
 // ── SECTION NAVIGATION ──
 function showSection(name) {
   document.querySelectorAll('.section-panel').forEach(p => p.classList.add('hidden'));
@@ -738,6 +741,10 @@ function prepareOrderForm() {
   document.getElementById('hidden_total_amount').value = Math.round(total);
   return true;
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  showSection(initialSection || 'overview');
+});
 
 // ── TRACKING MODAL ──
 function openTrackingModal(order) {
