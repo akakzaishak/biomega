@@ -710,23 +710,33 @@ function toggleQtyInput(checkbox, pid) {
 }
 
 function updateTotal() {
+  const totalElement = document.getElementById('order-total');
+  if (!totalElement) {
+    return;
+  }
+
   let total = 0;
-  document.querySelectorAll('.product-checkbox:checked').forEach(cb => {
-    const card = cb.closest('.product-card');
-    const qtyInput = card.querySelector('.qty-input');
-    const price = parseFloat(qtyInput?.dataset.price || 0);
-    const qty = parseInt(qtyInput?.value || 1);
-    total += price * qty;
+  document.querySelectorAll('#product-list .product-row').forEach(row => {
+    const qtyInput = row.querySelector('input[name$="[quantity]"]');
+    const qty = parseInt(qtyInput?.value || 0, 10) || 0;
+    total += qty;
   });
-  document.getElementById('order-total').textContent = total.toFixed(2) + ' DA';
+  totalElement.textContent = total.toFixed(2) + ' DA';
 }
 
 function validateOrder() {
-  const checked = document.querySelectorAll('.product-checkbox:checked');
-  if (checked.length === 0) {
+  const rows = Array.from(document.querySelectorAll('#product-list .product-row'));
+  const validRows = rows.filter(row => {
+    const nameInput = row.querySelector('input[name$="[medicine_name]"]');
+    const qtyInput = row.querySelector('input[name$="[quantity]"]');
+    return (nameInput?.value || '').trim() !== '' && parseInt(qtyInput?.value || '0', 10) > 0;
+  });
+
+  if (validRows.length === 0) {
     document.getElementById('no-product-error').classList.remove('hidden');
-    document.getElementById('products-grid').classList.add('shake');
-    setTimeout(() => document.getElementById('products-grid').classList.remove('shake'), 400);
+    const list = document.getElementById('product-list');
+    list?.classList.add('shake');
+    setTimeout(() => list?.classList.remove('shake'), 400);
     return false;
   }
   document.getElementById('no-product-error').classList.add('hidden');
@@ -735,10 +745,29 @@ function validateOrder() {
 
 function prepareOrderForm() {
   if (!validateOrder()) return false;
-  // set hidden total
-  const totalText = document.getElementById('order-total').textContent || '0';
-  const total = parseFloat(totalText.replace(/[^0-9\.\-]/g, '')) || 0;
-  document.getElementById('hidden_total_amount').value = Math.round(total);
+
+  const rows = Array.from(document.querySelectorAll('#product-list .product-row'));
+  let total = 0;
+
+  rows.forEach(row => {
+    const nameInput = row.querySelector('input[name$="[medicine_name]"]');
+    const qtyInput = row.querySelector('input[name$="[quantity]"]');
+    const name = (nameInput?.value || '').trim();
+    const qty = parseInt(qtyInput?.value || '0', 10) || 0;
+
+    if (name === '' || qty <= 0) {
+      row.remove();
+      return;
+    }
+
+    total += qty;
+  });
+
+  const hiddenTotal = document.getElementById('hidden_total_amount');
+  if (hiddenTotal) {
+    hiddenTotal.value = Math.max(0, Math.round(total));
+  }
+
   return true;
 }
 
