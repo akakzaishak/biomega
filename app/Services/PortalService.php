@@ -4,13 +4,13 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Hash;
 use App\Models\Admin;
 use App\Models\Pharmacy;
 use App\Models\CommercialService;
 use App\Models\DeliveryManager;
 use App\Models\DeliveryPerson;
 use App\Models\StockEmployee;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Order;
 use App\Models\AsinedOrder;
 use App\Models\OrderItem;
@@ -74,18 +74,17 @@ class PortalService
 
     public function authenticateByPhone(string $phone): ?array
     {
-
         $map = [
-            'admin' => Admin::class,
-            'pharmacy' => Pharmacy::class,
-            'commercialservice' => CommercialService::class,
-            'deliverymanager' => DeliveryManager::class,
-            'deliveryperson' => DeliveryPerson::class,
-            'stockemployee' => StockEmployee::class,
+            'admin' => 'PhoneNumber',
+            'pharmacy' => 'PhoneNumber',
+            'commercialservice' => 'PhoneNumber',
+            'deliverymanager' => 'PhoneNumber',
+            'deliveryperson' => 'PhoneNumber',
+            'stockemployee' => 'PhoneNumber',
         ];
 
-        foreach ($map as $table => $modelClass) {
-            $user = $modelClass::where('PhoneNumber', $phone)->first();
+        foreach ($map as $table => $phoneColumn) {
+            $user = DB::table($table)->where($phoneColumn, $phone)->first();
             if ($user) {
                 return [
                     'table' => $table,
@@ -109,11 +108,11 @@ class PortalService
     public function createPharmacy(array $data): void
     {
         if (Pharmacy::where('NIF', $data['nif'])->exists()) {
-            throw new RuntimeException('This NIF already exists.');
+            throw new RuntimeException('Une pharmacie avec ce NIF existe déjà.');
         }
 
         if (Pharmacy::where('PhoneNumber', $data['phone'])->exists()) {
-            throw new RuntimeException('This phone number already exists.');
+            throw new RuntimeException('Ce numéro de téléphone est déjà enregistré.');
         }
 
         Pharmacy::create([
@@ -195,6 +194,28 @@ class PortalService
             ->toArray();
     }
 
+    public function adminOrderDashboardOrders(): array
+    {
+        return DB::table('order as o')
+            ->leftJoin('asined_order as a', 'o.Tracking', '=', 'a.order_id')
+            ->leftJoin('deliveryperson as d', 'a.deliveryperson_id', '=', 'd.PhoneNumber')
+            ->leftJoin('pharmacy as p', 'a.pharmacy_id', '=', 'p.NIF')
+            ->orderByDesc('o.Date')
+            ->select([
+                'o.*',
+                'a.deliveryperson_id',
+                DB::raw('a.pharmacy_id AS assigned_pharmacy'),
+                DB::raw('d.FirstName AS dp_first'),
+                DB::raw('d.LastName AS dp_last'),
+                DB::raw('p.FirstName AS ph_first'),
+                DB::raw('p.LastName AS ph_last'),
+                DB::raw('p.Location AS ph_loc'),
+            ])
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->toArray();
+    }
+
     public function orders(): array
     {
         $orders = Order::with(['asinedOrder.pharmacy'])->orderBy('Date','desc')->get();
@@ -207,6 +228,33 @@ class PortalService
             $arr['pharmacy_location'] = $o->asinedOrder?->pharmacy?->Location ?? null;
             return $arr;
         })->toArray();
+    }
+
+    public function assignDeliveryPersonToOrder(string $orderId, ?string $pharmacyId, string $phone): bool
+    {
+        $existing = AsinedOrder::where('order_id', $orderId)->first();
+
+        if ($existing) {
+            $existing->deliveryperson_id = $phone;
+            if ($pharmacyId !== null && $pharmacyId !== '') {
+                $existing->pharmacy_id = $pharmacyId;
+            }
+
+            return (bool) $existing->save();
+        }
+
+        return (bool) AsinedOrder::create([
+            'order_id' => $orderId,
+            'pharmacy_id' => $pharmacyId,
+            'deliveryperson_id' => $phone,
+        ]);
+    }
+
+    public function updateOrderAmount(string $orderId, int $amount): bool
+    {
+        return (bool) DB::table('order')
+            ->where('Tracking', $orderId)
+            ->update(['otalAmount' => $amount]);
     }
 
     public function pharmacies(): array
@@ -262,6 +310,173 @@ class PortalService
             ->get(['ID', 'FirstName', 'LastName', 'PhoneNumber'])
             ->map(fn ($driver) => $driver->toArray())
             ->toArray();
+    }
+
+    public function forceDeliveryGps(string $phone, string $adminName): bool
+    {
+        $now = now();
+
+        if (!Schema::hasTable('delivery_location')) {
+            return false;
+        }
+
+        return (bool) DB::table('delivery_location')->updateOrInsert(
+            ['PhoneNumber' => $phone],
+            [
+                'Latitude' => 0,
+                'Longitude' => 0,
+                'Status' => 0,
+                'GpsForced' => 1,
+                'ForcedAt' => $now,
+                'ForcedByAdmin' => $adminName,
+                'UpdatedAt' => $now,
+            ]
+        );
+    }
+
+    public function deliveryLocationHistory(): array
+    {
+        if (!Schema::hasTable('delivery_location_history')) {
+            return [];
+        }
+
+        return DB::table('delivery_location_history')
+            ->where('UpdatedAt', '>=', now()->subHours(8))
+            ->orderBy('PhoneNumber')
+            ->orderBy('UpdatedAt')
+            ->get(['PhoneNumber', 'Latitude', 'Longitude', 'UpdatedAt'])
+            ->map(function ($row) {
+                $item = (array) $row;
+                return [
+                    'PhoneNumber' => $item['PhoneNumber'] ?? null,
+                    'lat' => (float) ($item['Latitude'] ?? 0),
+                    'lng' => (float) ($item['Longitude'] ?? 0),
+                    'time' => $item['UpdatedAt'] ?? null,
+                ];
+            })
+            ->groupBy('PhoneNumber')
+            ->toArray();
+    }
+
+    public function assignedOrdersByDriver(): array
+    {
+        if (!Schema::hasTable('asined_order') || !Schema::hasTable('order')) {
+            return [];
+        }
+
+        $orders = DB::table('asined_order as ao')
+            ->join('order as o', 'ao.order_id', '=', 'o.Tracking')
+            ->leftJoin('pharmacy as p', 'ao.pharmacy_id', '=', 'p.NIF')
+            ->where('o.Status', 0)
+            ->orderByDesc('o.IsUrgen')
+            ->orderBy('ao.deliveryperson_id')
+            ->select([
+                'ao.deliveryperson_id',
+                'ao.order_id',
+                'o.otalAmount',
+                'o.IsUrgen',
+                'o.Status',
+                DB::raw('p.FirstName AS ph_first'),
+                DB::raw('p.LastName AS ph_last'),
+                'p.Location',
+            ])
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->toArray();
+
+        $grouped = [];
+        foreach ($orders as $order) {
+            $grouped[$order['deliveryperson_id']][] = $order;
+        }
+
+        return $grouped;
+    }
+
+    public function trackingDashboardData(): array
+    {
+        if (Schema::hasTable('delivery_location')) {
+            $deliveryPersons = DB::table('deliveryperson as d')
+                ->leftJoin('delivery_location as l', 'd.PhoneNumber', '=', 'l.PhoneNumber')
+                ->leftJoin('asined_order as ao', 'd.PhoneNumber', '=', 'ao.deliveryperson_id')
+                ->leftJoin('order as o', function ($join) {
+                    $join->on('ao.order_id', '=', 'o.Tracking')
+                        ->where('o.Status', '=', 0);
+                })
+                ->groupBy(
+                    'd.ID',
+                    'd.FirstName',
+                    'd.LastName',
+                    'd.PhoneNumber',
+                    'l.Latitude',
+                    'l.Longitude',
+                    'l.UpdatedAt',
+                    'l.Status',
+                    'l.GpsForced',
+                    'l.ForcedAt',
+                    'l.ForcedByAdmin'
+                )
+                ->orderByDesc('l.UpdatedAt')
+                ->select([
+                    'd.ID',
+                    'd.FirstName',
+                    'd.LastName',
+                    'd.PhoneNumber',
+                    'l.Latitude',
+                    'l.Longitude',
+                    'l.UpdatedAt',
+                    DB::raw('l.Status AS OnlineStatus'),
+                    'l.GpsForced',
+                    'l.ForcedAt',
+                    'l.ForcedByAdmin',
+                    DB::raw('COUNT(DISTINCT ao.ID) AS ActiveOrders'),
+                ])
+                ->get()
+                ->map(fn ($row) => (array) $row)
+                ->toArray();
+        } else {
+            // Fallback: return delivery persons without location columns
+            $deliveryPersons = 
+                \App\Models\DeliveryPerson::orderBy('ID')
+                ->get(['ID', 'FirstName', 'LastName', 'PhoneNumber'])
+                ->map(fn($d) => array_merge($d->toArray(), [
+                    'Latitude' => null,
+                    'Longitude' => null,
+                    'UpdatedAt' => null,
+                    'OnlineStatus' => 0,
+                    'GpsForced' => 0,
+                    'ForcedAt' => null,
+                    'ForcedByAdmin' => null,
+                    'ActiveOrders' => 0,
+                ]))
+                ->toArray();
+        }
+
+        $routeHistory = $this->deliveryLocationHistory();
+        $assignedOrders = $this->assignedOrdersByDriver();
+
+        $stats = [
+            'totalDP' => count($deliveryPersons),
+            'onlineDP' => count(array_filter($deliveryPersons, fn ($driver) =>
+                !empty($driver['Latitude']) && !empty($driver['UpdatedAt']) && strtotime($driver['UpdatedAt']) > time() - 600
+            )),
+        ];
+
+        $stats['offlineDP'] = $stats['totalDP'] - $stats['onlineDP'];
+        $stats['forcedCount'] = count(array_filter($deliveryPersons, fn ($driver) => !empty($driver['GpsForced'])));
+
+        $palette = ['#0060a8', '#186a22', '#b45309', '#7c3aed', '#be123c', '#0891b2', '#d97706', '#059669'];
+        $colors = [];
+        foreach ($deliveryPersons as $index => $driver) {
+            $colors[$driver['PhoneNumber']] = $palette[$index % count($palette)];
+        }
+
+        return [
+            'deliveryPersons' => $deliveryPersons,
+            'routeHistory' => $routeHistory,
+            'assignedOrders' => $assignedOrders,
+            'stats' => $stats,
+            'dpColors' => $colors,
+        ];
     }
 
     public function pharmacyOrderCounts(): array
@@ -340,18 +555,7 @@ class PortalService
 
     public function trackingRoutes(): array
     {
-        $assigned = AsinedOrder::with(['order','pharmacy'])->orderByDesc('id')->get();
-
-        return $assigned->map(fn($a) => [
-            'order_id' => $a->order_id,
-            'pharmacy_id' => $a->pharmacy_id,
-            'deliveryperson_id' => $a->deliveryperson_id,
-            'Date' => $a->order?->Date ?? null,
-            'IsUrgen' => $a->order?->IsUrgen ?? null,
-            'Status' => $a->order?->Status ?? null,
-            'pharmacy_first' => $a->pharmacy?->FirstName ?? null,
-            'pharmacy_last' => $a->pharmacy?->LastName ?? null,
-        ])->toArray();
+        return $this->trackingDashboardData()['assignedOrders'];
     }
 
     public function inventoryItems(): array
@@ -409,18 +613,31 @@ class PortalService
 
     public function deliveryManagerDashboard(): array
     {
+        $assignments = AsinedOrder::with(['order','pharmacy'])
+            ->get()
+            ->map(function ($a) {
+                return [
+                    'order_id' => $a->order_id,
+                    'Date' => $a->order?->Date ?? null,
+                    'IsUrgen' => $a->order?->IsUrgen ?? null,
+                    'Status' => $a->order?->Status ?? null,
+                    'pharmacy_first' => $a->pharmacy?->FirstName ?? null,
+                    'pharmacy_last' => $a->pharmacy?->LastName ?? null,
+                ];
+            })
+            ->sortByDesc(fn($r) => $r['Date'] ?? null)
+            ->values()
+            ->toArray();
+
+        $drivers = DeliveryPerson::orderBy('ID')->get(['ID','FirstName','LastName','PhoneNumber'])->map(fn($d) => (array) $d)->toArray();
+
         return [
             'driversCount' => DeliveryPerson::count(),
             'activeCount' => Order::where('Status', 0)->count(),
             'urgentCount' => Order::where('IsUrgen', 1)->count(),
-            'assignments' => AsinedOrder::with(['order','pharmacy'])->get()->map(fn($a) => [
-                'order_id' => $a->order_id,
-                'Date' => $a->order?->Date ?? null,
-                'IsUrgen' => $a->order?->IsUrgen ?? null,
-                'Status' => $a->order?->Status ?? null,
-                'pharmacy_first' => $a->pharmacy?->FirstName ?? null,
-                'pharmacy_last' => $a->pharmacy?->LastName ?? null,
-            ])->toArray(),
+            'completedCount' => Order::where('Status', 1)->count(),
+            'assignments' => $assignments,
+            'driverRows' => $drivers,
         ];
     }
 
@@ -483,9 +700,31 @@ class PortalService
 
     public function stockDashboard(): array
     {
+        $pendingOrders = DB::table('order as o')
+            ->leftJoin('asined_order as ao', 'ao.order_id', '=', 'o.Tracking')
+            ->leftJoin('pharmacy as p', 'p.NIF', '=', 'ao.pharmacy_id')
+            ->where('o.Status', 0)
+            ->orderByDesc('o.Date')
+            ->orderByDesc('o.IsUrgen')
+            ->select([
+                'o.*',
+                'ao.pharmacy_id',
+                'ao.deliveryperson_id',
+                'ao.ID as ao_id',
+                'p.FirstName as p_first',
+                'p.LastName as p_last',
+                'p.Location as p_loc',
+            ])
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->toArray();
+
         return [
-            'pendingOrders' => DB::table('order')->where('Status', 0)->orderByDesc('Date')->limit(8)->get(['Tracking','Date','otalAmount','IsUrgen'])->map(fn($r) => (array) $r)->toArray(),
-            'pharmacies' => Pharmacy::orderBy('NIF','asc')->get(['NIF','FirstName','LastName','Location'])->map(fn($p) => (array) $p)->toArray(),
+            'pendingOrders' => $pendingOrders,
+            'pharmacies' => Pharmacy::orderBy('NIF', 'asc')
+                ->get(['NIF', 'FirstName', 'LastName', 'Location', 'PhoneNumber'])
+                ->map(fn ($pharmacy) => (array) $pharmacy)
+                ->toArray(),
         ];
     }
 
@@ -495,22 +734,63 @@ class PortalService
         DB::beginTransaction();
 
         try {
+            $amount = (int) ($data['amount'] ?? $data['total_amount'] ?? 0);
+            $items = [];
+
+            if (!empty($data['medicine_name'])) {
+                $items[] = [
+                    'name' => (string) $data['medicine_name'],
+                    'quantity' => (int) ($data['quantity'] ?? 1),
+                ];
+            }
+
+            if (!empty($data['item_name']) && is_array($data['item_name'])) {
+                $quantities = $data['item_qty'] ?? [];
+                foreach ($data['item_name'] as $index => $name) {
+                    $name = trim((string) $name);
+                    if ($name === '') {
+                        continue;
+                    }
+
+                    $items[] = [
+                        'name' => $name,
+                        'quantity' => max(1, (int) ($quantities[$index] ?? 1)),
+                    ];
+                }
+            }
+
+            if ($items === []) {
+                throw new RuntimeException('At least one item is required.');
+            }
+
             Order::create([
                 'QRCode' => 'QR-' . $tracking,
                 'Tracking' => $tracking,
                 'Date' => now()->toDateString(),
-                'otalAmount' => $data['amount'],
+                'otalAmount' => $amount,
                 'ProofImage' => '',
                 'PackageNumber' => $data['package_number'],
                 'Status' => 0,
                 'QRimage' => '',
-                'IsUrgen' => 0,
+                'IsUrgen' => !empty($data['is_urgent']) ? 1 : 0,
             ]);
 
-            OrderItem::create([
-                'Name' => $data['medicine_name'],
-                'contiti' => $data['quantity'],
-            ]);
+            foreach ($items as $item) {
+                OrderItem::create([
+                    'Name' => $item['name'],
+                    'contiti' => $item['quantity'],
+                ]);
+            }
+
+            if (!empty($data['pharmacy_id'])) {
+                AsinedOrder::updateOrCreate(
+                    ['order_id' => $tracking],
+                    [
+                        'pharmacy_id' => $data['pharmacy_id'],
+                        'deliveryperson_id' => null,
+                    ]
+                );
+            }
 
             DB::commit();
         } catch (\Throwable $exception) {
@@ -519,6 +799,23 @@ class PortalService
         }
 
         return $tracking;
+    }
+
+    public function assignPharmacyToOrder(string $tracking, string $pharmacyId): bool
+    {
+        if ($tracking === '' || $pharmacyId === '') {
+            return false;
+        }
+
+        AsinedOrder::updateOrCreate(
+            ['order_id' => $tracking],
+            [
+                'pharmacy_id' => $pharmacyId,
+                'deliveryperson_id' => null,
+            ]
+        );
+
+        return true;
     }
 
     public function createAdminOrder(array $data): string

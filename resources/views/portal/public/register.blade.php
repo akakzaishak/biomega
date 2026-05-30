@@ -3,68 +3,171 @@
         <span class="material-symbols-outlined text-sm">app_registration</span>
         Pharmacy Registration
     </p>
-    <h2 class="text-3xl font-extrabold headline mb-2">Register Pharmacy</h2>
-    <p class="text-sm text-slate-600 mb-6">Create a pharmacy account to join the portal.</p>
+    <h2 class="text-3xl font-extrabold headline mb-2">Enregistrer votre Pharmacie</h2>
+    <p class="text-sm text-slate-600 mb-6">Rejoignez le réseau Bio Mega Pharme et connectez-vous avec des milliers de patients à travers l'Algérie.</p>
 
     @if(session('error') ?? $error ?? false)
-        <div class="mb-4 text-sm text-red-700">{{ session('error') ?? $error }}</div>
+        <div class="mb-4 flex items-center gap-3 bg-error-container text-on-error-container text-sm font-semibold px-4 py-3 rounded-xl border border-error/20">
+            <span class="material-symbols-outlined text-lg flex-shrink-0">error</span>
+            {{ session('error') ?? $error }}
+        </div>
     @endif
     @if(session('success') ?? $success ?? false)
-        <div class="mb-4 text-sm text-green-700">{{ session('success') ?? $success }}</div>
+        <div class="mb-4 flex items-start gap-3 bg-green-50 text-green-800 text-sm font-semibold px-4 py-4 rounded-xl border border-green-200">
+            <span class="material-symbols-outlined text-lg flex-shrink-0 text-green-600" style="font-variation-settings:'FILL' 1;">check_circle</span>
+            <div>
+                {{ session('success') ?? $success }}
+                <a href="{{ route('login') }}" class="block mt-2 underline text-primary font-bold">→ Aller à la page de connexion</a>
+            </div>
+        </div>
     @endif
     @if ($errors->any())
-        <div class="mb-4 text-sm text-red-700">
-            @foreach ($errors->all() as $message)
-                <div>{{ $message }}</div>
-            @endforeach
+        <div class="mb-4 flex items-center gap-3 bg-error-container text-on-error-container text-sm font-semibold px-4 py-3 rounded-xl border border-error/20">
+            <span class="material-symbols-outlined text-lg flex-shrink-0">error</span>
+            <div class="space-y-1">
+                @foreach ($errors->all() as $message)
+                    <div>{{ $message }}</div>
+                @endforeach
+            </div>
         </div>
     @endif
 
-    <form method="post" action="{{ route('register.pharmacy') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <form method="post" action="{{ route('register.pharmacy') }}" class="space-y-5">
         @csrf
+
         <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">NIF</label>
-            <input name="nif" value="{{ old('nif') }}" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">badge</span>Informations d'identité
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">NIF <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">tag</span>
+                        <input type="text" name="nif" required placeholder="Numéro d'identification fiscale" value="{{ old('nif') }}" class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Horaire d'ouverture <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">schedule</span>
+                        <input type="time" name="worktime" required value="{{ old('worktime') }}" class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Prénom du responsable <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">person</span>
+                        <input type="text" name="firstname" required placeholder="Prénom" value="{{ old('firstname') }}" class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Nom du responsable <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">person</span>
+                        <input type="text" name="lastname" required placeholder="Nom" value="{{ old('lastname') }}" class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <div class="h-px bg-slate-200"></div>
+
         <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Wilaya</label>
-            <select name="wilaya" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none">
-                @foreach($wilayas as $w)
-                    <option value="{{ $w }}">{{ $w }}</option>
-                @endforeach
-            </select>
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">location_on</span>Contact & Localisation
+            </p>
+            <div class="mb-4">
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Numéro de téléphone <span class="text-red-500">*</span></label>
+                <div class="relative group">
+                    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">phone</span>
+                    <input type="tel" name="phone" required placeholder="0555123456" value="{{ old('phone') }}" class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Wilaya <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">map</span>
+                        <select name="wilaya" required class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 text-sm appearance-none">
+                            <option value="">Sélectionner une wilaya</option>
+                            @foreach ($wilayas as $wilaya)
+                                <option value="{{ $wilaya }}" @selected(old('wilaya') === $wilaya)>{{ $wilaya }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Adresse précise <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">home_pin</span>
+                        <input type="text" name="location" required placeholder="Rue, quartier, cité..." value="{{ old('location') }}" class="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <div class="h-px bg-slate-200"></div>
+
         <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">First name</label>
-            <input name="firstname" value="{{ old('firstname') }}" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">lock</span>Sécurité du compte
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Mot de passe <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">lock</span>
+                        <input type="password" id="pass1" name="password" required placeholder="Min. 6 caractères" class="w-full pl-12 pr-12 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                        <button type="button" onclick="togglePwd('pass1','eye1')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors">
+                            <span id="eye1" class="material-symbols-outlined text-xl">visibility</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Confirmer le mot de passe <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl group-focus-within:text-primary transition-colors">lock_reset</span>
+                        <input type="password" id="pass2" name="confirm" required placeholder="Répéter le mot de passe" class="w-full pl-12 pr-12 py-3.5 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20 transition-all text-slate-900 placeholder:text-slate-400 text-sm" />
+                        <button type="button" onclick="togglePwd('pass2','eye2')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors">
+                            <span id="eye2" class="material-symbols-outlined text-xl">visibility</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Last name</label>
-            <input name="lastname" value="{{ old('lastname') }}" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
-        </div>
-        <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Phone</label>
-            <input name="phone" value="{{ old('phone') }}" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
-        </div>
-        <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Location</label>
-            <input name="location" value="{{ old('location') }}" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
-        </div>
-        <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Work time</label>
-            <input name="worktime" value="{{ old('worktime') }}" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
-        </div>
-        <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Password</label>
-            <input name="password" type="password" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
-        </div>
-        <div>
-            <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Confirm</label>
-            <input name="confirm" type="password" class="mt-2 w-full border border-slate-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
-        </div>
-        <div class="md:col-span-2 flex justify-end gap-3 mt-2 pt-2">
-            <a href="{{ route('admin.pharmacies') }}" class="px-5 py-3 border border-slate-200 rounded-xl font-semibold text-slate-700">Cancel</a>
-            <button type="submit" class="bg-primary text-white px-5 py-3 rounded-xl font-bold shadow-sm">Register</button>
-        </div>
+
+        <p class="text-xs text-slate-500 text-center px-4">En vous inscrivant, vous acceptez d'être contacté par l'équipe Bio Mega Pharme pour vérification de votre dossier pharmacien.</p>
+
+        <button type="submit" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-white py-4 rounded-xl font-bold text-sm tracking-tight shadow-md hover:shadow-lg hover:opacity-90 active:scale-[0.98] transition-all">
+            <span class="material-symbols-outlined text-lg" style="font-variation-settings:'FILL' 1;">how_to_reg</span>
+            Enregistrer ma Pharmacie
+        </button>
     </form>
 </div>
+
+<p class="text-center text-sm text-slate-600 mt-6">
+    Vous avez déjà un compte ?
+    <a href="{{ route('login') }}" class="text-primary font-semibold hover:underline">Se connecter</a>
+</p>
+
+<script>
+    function togglePwd(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.textContent = 'visibility_off';
+        } else {
+            input.type = 'password';
+            icon.textContent = 'visibility';
+        }
+    }
+</script>
