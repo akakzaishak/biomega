@@ -317,6 +317,43 @@
         }
     }
 
+    // Attach typeahead to existing product inputs
+    function attachAllProductTypeaheads() {
+        const rows = productContainer.querySelectorAll('.product-row');
+        rows.forEach((row) => {
+            const inputEl = row.querySelector('.product-input');
+            const resultsEl = row.querySelector('.product-results');
+            if (inputEl && resultsEl) attachProductTypeahead(inputEl, resultsEl);
+            const removeBtn = row.querySelector('.remove-product');
+            if (removeBtn) removeBtn.addEventListener('click', () => row.remove());
+        });
+    }
+
+    attachAllProductTypeaheads();
+
+    // Add product row
+    const addProductBtn = document.querySelector('.add-product');
+    if (addProductBtn) {
+        addProductBtn.addEventListener('click', () => {
+            const template = document.createElement('div');
+            template.className = 'grid grid-cols-1 md:grid-cols-3 gap-4 items-center product-row';
+            template.innerHTML = `
+                <div class="relative md:col-span-2">
+                    <input name="product_name[]" class="product-input mt-2 w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm" placeholder="Type a product name" autocomplete="off">
+                    <div class="product-results hidden absolute left-0 right-0 mt-2 z-20 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-56 overflow-y-auto"></div>
+                </div>
+                <div>
+                    <input name="quantity[]" type="number" min="1" value="1" class="mt-2 w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm">
+                </div>
+                <div>
+                    <button type="button" class="remove-product mt-2 px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-bold">Remove</button>
+                </div>
+            `;
+            productContainer.appendChild(template);
+            attachAllProductTypeaheads();
+        });
+    }
+
     function attachProductTypeahead(inputEl, resultsEl) {
         let activeIndex = -1;
         let currentButtons = [];
