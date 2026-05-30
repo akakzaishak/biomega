@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AsinedOrder;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -30,6 +31,12 @@ class AdminOrderDeleteTest extends TestCase
             'deliveryperson_id' => null,
         ]);
 
+        OrderItem::create([
+            'order_id' => 'ORD-DEL-1',
+            'Name' => 'Item 1',
+            'contiti' => 2,
+        ]);
+
         Payment::create([
             'order_id' => 'ORD-DEL-1',
             'amount' => 100,
@@ -45,6 +52,7 @@ class AdminOrderDeleteTest extends TestCase
         $response->assertRedirect();
 
         $this->assertDatabaseMissing('order', ['Tracking' => 'ORD-DEL-1']);
+        $this->assertDatabaseMissing('orderitem', ['order_id' => 'ORD-DEL-1']);
         $this->assertDatabaseMissing('asined_order', ['order_id' => 'ORD-DEL-1']);
         $this->assertDatabaseMissing('payment', ['order_id' => 'ORD-DEL-1']);
     }

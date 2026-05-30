@@ -13,6 +13,6 @@ class DeliveryPerson extends Model
 
     public function assignedOrders()
     {
-        return $this->hasMany(AsinedOrder::class, 'deliveryperson_id', 'ID');
+        return $this->hasMany(AsinedOrder::class, 'deliveryperson_id', 'PhoneNumber');
     }
 }

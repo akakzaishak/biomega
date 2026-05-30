@@ -22,6 +22,6 @@ class AsinedOrder extends Model
 
     public function deliveryPerson()
     {
-        return $this->belongsTo(DeliveryPerson::class, 'deliveryperson_id', 'ID');
+        return $this->belongsTo(DeliveryPerson::class, 'deliveryperson_id', 'PhoneNumber');
     }
 }

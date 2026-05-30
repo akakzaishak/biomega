@@ -546,7 +546,27 @@ class PortalService
             }
 
             if ($employee) {
-                return (bool) $employee->delete();
+                DB::beginTransaction();
+
+                try {
+                    if ($modelClass === DeliveryPerson::class) {
+                        $employeePhone = (string) ($employee->PhoneNumber ?? $phone);
+                        $employeeId = $employee->ID ?? $id;
+
+                        DB::table('asined_order')
+                            ->where('deliveryperson_id', $employeePhone)
+                            ->orWhere('deliveryperson_id', $employeeId)
+                            ->update(['deliveryperson_id' => null]);
+                    }
+
+                    $deleted = (bool) $employee->delete();
+                    DB::commit();
+
+                    return $deleted;
+                } catch (\Throwable $exception) {
+                    DB::rollBack();
+                    throw $exception;
+                }
             }
         }
 
@@ -893,7 +913,18 @@ class PortalService
         $pharmacy = Pharmacy::find($nif);
         if (!$pharmacy) return false;
 
-        return (bool) $pharmacy->delete();
+        DB::beginTransaction();
+
+        try {
+            DB::table('asined_order')->where('pharmacy_id', $nif)->delete();
+            $deleted = (bool) $pharmacy->delete();
+            DB::commit();
+
+            return $deleted;
+        } catch (\Throwable $exception) {
+            DB::rollBack();
+            throw $exception;
+        }
     }
 
     public function markOrderComplete(string $tracking): bool
@@ -924,6 +955,7 @@ class PortalService
         DB::beginTransaction();
 
         try {
+            OrderItem::where('order_id', $tracking)->delete();
             AsinedOrder::where('order_id', $tracking)->delete();
             Payment::where('order_id', $tracking)->delete();
             $deleted = (bool) $order->delete();

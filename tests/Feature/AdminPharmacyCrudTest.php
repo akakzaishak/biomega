@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AsinedOrder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use App\Models\Pharmacy;
@@ -22,10 +23,17 @@ class AdminPharmacyCrudTest extends TestCase
             'Location' => 'Test',
         ]);
 
+        AsinedOrder::create([
+            'order_id' => 'ORD-PH-1',
+            'pharmacy_id' => 'DELTEST',
+            'deliveryperson_id' => null,
+        ]);
+
         $response = $this->withSession(['table' => 'admin'])->post(route('admin.pharmacies.delete', 'DELTEST'));
 
         $response->assertRedirect();
 
         $this->assertDatabaseMissing('pharmacy', ['NIF' => 'DELTEST']);
+        $this->assertDatabaseMissing('asined_order', ['pharmacy_id' => 'DELTEST']);
     }
 }
