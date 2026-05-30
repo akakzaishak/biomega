@@ -563,6 +563,23 @@ class PortalService
         return OrderItem::selectRaw('Name, SUM(contiti) as qty')->groupBy('Name')->orderByDesc('qty')->limit(10)->get()->map(fn($r) => (array) $r)->toArray();
     }
 
+    public function medicineSuggestions(): array
+    {
+        if (!Schema::hasTable('orderitem')) {
+            return [];
+        }
+
+        return OrderItem::query()
+            ->select('Name')
+            ->distinct()
+            ->orderBy('Name')
+            ->limit(25)
+            ->pluck('Name')
+            ->filter()
+            ->values()
+            ->toArray();
+    }
+
     public function reportData(): array
     {
         $rows = DB::table('order')
@@ -777,6 +794,7 @@ class PortalService
 
             foreach ($items as $item) {
                 OrderItem::create([
+                    'order_id' => $tracking,
                     'Name' => $item['name'],
                     'contiti' => $item['quantity'],
                 ]);
@@ -854,6 +872,7 @@ class PortalService
                     $q = (int) ($qtys[$idx] ?? 1);
                     if (trim((string) $pname) === '') continue;
                     OrderItem::create([
+                        'order_id' => $tracking,
                         'Name' => $pname,
                         'contiti' => max(1, $q),
                     ]);

@@ -8,5 +8,10 @@ class OrderItem extends Model
 {
     protected $table = 'orderitem';
     public $timestamps = false;
-    protected $fillable = ['Name','contiti'];
+    protected $fillable = ['order_id','Name','contiti'];
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'order_id', 'Tracking');
+    }
 }

@@ -741,6 +741,7 @@ class PortalController extends Controller
             'page' => 'pharmacy',
             'userName' => $this->userName('Pharmacy'),
             'pharmacyName' => $this->userName('Pharmacy'),
+            'medicineSuggestions' => $this->portal->medicineSuggestions(),
         ], $data, ['orders' => $orders]));
     }
 

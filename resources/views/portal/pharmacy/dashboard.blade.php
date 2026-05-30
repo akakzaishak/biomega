@@ -2,6 +2,7 @@
     $pharmacyName = $pharmacyName ?? trim((string) session('pharmacy_name', 'Pharmacy'));
     $orders = $orders ?? [];
     $products = $products ?? [];
+  $medicineSuggestions = $medicineSuggestions ?? [];
     $totalOrders = $totalOrders ?? count($orders);
     $pendingOrders = $pendingOrders ?? count(array_filter($orders, fn($o) => in_array($o['status'] ?? '', ['PENDING_COMMERCIAL_REVIEW'])));
     $activeOrders = $activeOrders ?? count(array_filter($orders, fn($o) => in_array($o['status'] ?? '', ['COMMERCIALLY_CONFIRMED','READY_FOR_DISPATCH','ASSIGNED_TO_DELIVERY','PICKED_UP','IN_TRANSIT'])));
@@ -280,112 +281,166 @@
     {{-- SECTION 2 — CREATE ORDER           --}}
     {{-- ════════════════════════════════════ --}}
     <div id="section-create" class="section-panel hidden space-y-6">
-      <div class="fade-in">
-        <h1 class="font-headline text-3xl font-extrabold tracking-tight text-on-surface">New Order</h1>
-        <p class="text-on-surface-variant font-medium mt-1">Select products, quantities and payment method.</p>
-      </div>
 
-      <div class="fade-in fade-in-1 bg-surface-container-lowest rounded-2xl border border-outline-variant/15 shadow-sm p-6 lg:p-8">
-        <form method="POST" action="{{ route('pharmacy.dashboard') }}" id="orderForm" class="space-y-8" onsubmit="return prepareOrderForm();">
-          @csrf
-          <input type="hidden" name="action" value="create_order" />
-          <input type="hidden" name="total_amount" id="hidden_total_amount" value="0" />
-          <input type="hidden" name="package_number" value="1" />
+    <div class="fade-in">
+        <h1 class="font-headline text-3xl font-extrabold tracking-tight text-on-surface">
+            New Order
+        </h1>
 
-          {{-- PRODUCT SELECTION --}}
-          <div>
-            <h3 class="font-headline font-bold text-base text-on-surface mb-4 flex items-center gap-2">
-              <span class="w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">1</span>
-              Select Products
-            </h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="products-grid">
-              @forelse($products as $product)
-              @php $pid = $product['product_id'] ?? $loop->index; @endphp
-                <label class="relative flex flex-col gap-3 p-4 rounded-xl border border-outline-variant/20 hover:border-primary/40 cursor-pointer transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5 product-card" data-id="{{ $pid }}">
-                <input type="checkbox" name="item_name[]" value="{{ $product['name'] ?? $pid }}" class="sr-only product-checkbox" onchange="toggleQtyInput(this, {{ $pid }})"/>
-                <div class="flex items-start justify-between">
-                  <div>
-                    <p class="font-bold text-on-surface text-sm">{{ $product['name'] ?? 'Product' }}</p>
-                    <p class="text-xs text-on-surface-variant mt-0.5">{{ $product['category'] ?? '' }}</p>
-                  </div>
-                  <div class="w-5 h-5 rounded border-2 border-outline-variant flex items-center justify-center product-check-icon flex-shrink-0">
-                    <span class="material-symbols-outlined text-primary hidden" style="font-size:14px">check</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-bold text-primary">{{ number_format($product['unit_price'] ?? 0, 2) }} DA</span>
-                  <span class="text-xs text-on-surface-variant">Stock: {{ $product['stock_quantity'] ?? 0 }}</span>
-                </div>
-                <div class="qty-wrapper hidden mt-1">
-                  <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1 block">Quantity</label>
-                  <input type="number" name="item_qty[]" min="1" max="{{ $product['stock_quantity'] ?? 999 }}" value="1"
-                    class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-low text-sm font-bold text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors qty-input"
-                    onclick="event.preventDefault()" data-price="{{ $product['unit_price'] ?? 0 }}" data-pid="{{ $pid }}"
-                    oninput="updateTotal()"/>
-                </div>
-              </label>
-              @empty
-              <div class="col-span-3 flex flex-col items-center py-10 text-on-surface-variant">
-                <span class="material-symbols-outlined text-4xl mb-2 opacity-30">inventory_2</span>
-                <p class="font-bold text-sm">No products available at the moment.</p>
-              </div>
-              @endforelse
-            </div>
-            <p class="text-xs text-error font-semibold mt-2 hidden" id="no-product-error">Please select at least one product.</p>
-          </div>
-
-          {{-- PAYMENT METHOD --}}
-          <div>
-            <h3 class="font-headline font-bold text-base text-on-surface mb-4 flex items-center gap-2">
-              <span class="w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">2</span>
-              Payment Method
-            </h3>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label class="flex items-center gap-3 p-4 rounded-xl border border-outline-variant/20 hover:border-primary/40 cursor-pointer transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                <input type="radio" name="payment_method" value="ONLINE" class="accent-primary w-4 h-4" required/>
-                <div>
-                  <p class="font-bold text-on-surface text-sm">Online Payment</p>
-                  <p class="text-xs text-on-surface-variant mt-0.5">Full amount paid upfront</p>
-                </div>
-              </label>
-              <label class="flex items-center gap-3 p-4 rounded-xl border border-outline-variant/20 hover:border-primary/40 cursor-pointer transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                <input type="radio" name="payment_method" value="CASH" class="accent-primary w-4 h-4"/>
-                <div>
-                  <p class="font-bold text-on-surface text-sm">Cash on Delivery</p>
-                  <p class="text-xs text-on-surface-variant mt-0.5">Pay when you receive</p>
-                </div>
-              </label>
-              <label class="flex items-center gap-3 p-4 rounded-xl border border-outline-variant/20 hover:border-primary/40 cursor-pointer transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                <input type="radio" name="payment_method" value="PARTIAL" class="accent-primary w-4 h-4"/>
-                <div>
-                  <p class="font-bold text-on-surface text-sm">Partial Payment</p>
-                  <p class="text-xs text-on-surface-variant mt-0.5">Part online + part cash</p>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {{-- ORDER SUMMARY --}}
-          <div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/15">
-            <div class="flex items-center justify-between">
-              <span class="font-bold text-on-surface-variant text-sm">Estimated Total</span>
-              <span class="font-extrabold text-xl text-primary font-headline" id="order-total">0.00 DA</span>
-            </div>
-            <p class="text-xs text-on-surface-variant mt-2">Final total will be confirmed by our commercial team after order review.</p>
-          </div>
-
-          {{-- SUBMIT --}}
-          <div class="flex gap-3 pt-2">
-            <button type="button" onclick="showSection('overview')" class="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-outline-variant text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-colors">
-              Cancel
-            </button>
-            <button type="submit" onclick="return validateOrder()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-md hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-              <span class="material-symbols-outlined text-lg">send</span>Submit Order
-            </button>
-          </div>
-        </form>
-      </div>
+        <p class="text-on-surface-variant font-medium mt-1">
+            Add medicines, quantities and order details.
+        </p>
     </div>
+
+    <div class="fade-in fade-in-1 bg-surface-container-lowest rounded-2xl border border-outline-variant/15 shadow-sm p-6 lg:p-8">
+
+          <form method="POST"
+            action="{{ route('pharmacy.dashboard') }}"
+            id="orderForm"
+            class="space-y-8">
+
+            @csrf
+
+            {{-- PRODUCTS --}}
+            <div>
+
+                <h3 class="font-headline font-bold text-base text-on-surface mb-4 flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
+                        1
+                    </span>
+                    Medicines
+                </h3>
+
+                <datalist id="medicine-suggestions">
+                    @foreach($medicineSuggestions as $suggestion)
+                        <option value="{{ $suggestion }}"></option>
+                    @endforeach
+                </datalist>
+
+                <div id="product-list" class="space-y-3">
+
+                    <div class="product-row grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
+
+                        <input
+                            list="medicine-suggestions"
+                            name="items[0][medicine_name]"
+                            placeholder="Medicine name"
+                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+
+                        <input
+                            type="number"
+                            min="1"
+                            value="1"
+                            name="items[0][quantity]"
+                            placeholder="Qty"
+                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+
+                    </div>
+
+                </div>
+
+                <button
+                    type="button"
+                    id="add-product-btn"
+                    class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant hover:bg-surface-container text-sm font-bold transition-colors">
+
+                    <span class="material-symbols-outlined text-base">
+                        add
+                    </span>
+
+                    Add Medicine
+
+                </button>
+
+            </div>
+
+            {{-- NOTES --}}
+            <div>
+
+                <h3 class="font-headline font-bold text-base text-on-surface mb-4 flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
+                        2
+                    </span>
+                    Notes
+                </h3>
+
+                <textarea
+                    rows="5"
+                    name="historique"
+                    placeholder="Order notes..."
+                    class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm resize-none focus:border-primary focus:ring-1 focus:ring-primary outline-none">{{ old('historique') }}</textarea>
+
+            </div>
+
+            {{-- URGENCY --}}
+            <div>
+
+                <h3 class="font-headline font-bold text-base text-on-surface mb-4 flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
+                        3
+                    </span>
+                    Priority
+                </h3>
+
+                <label class="flex items-center gap-3 p-4 rounded-xl border border-outline-variant/20 bg-surface-container-low cursor-pointer">
+
+                    <input
+                        type="checkbox"
+                        name="is_urgent"
+                        value="1"
+                        class="accent-primary w-4 h-4">
+
+                    <div>
+                        <p class="font-bold text-sm text-on-surface">
+                            Urgent Order
+                        </p>
+
+                        <p class="text-xs text-on-surface-variant">
+                            Mark this order as urgent.
+                        </p>
+                    </div>
+
+                </label>
+
+            </div>
+
+            {{-- PAYMENT METHOD --}}
+            <input
+                type="hidden"
+                name="payment_method"
+                value="cash">
+
+            {{-- ACTIONS --}}
+            <div class="flex gap-3 pt-2">
+
+                <button
+                    type="button"
+                    onclick="showSection('overview')"
+                    class="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-outline-variant text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-colors">
+
+                    Cancel
+
+                </button>
+
+                <button
+                    type="submit"
+                    class="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-md hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+
+                    <span class="material-symbols-outlined">
+                        send
+                    </span>
+
+                    Create Order
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
 
     {{-- ════════════════════════════════════ --}}
     {{-- SECTION 3 — MY ORDERS              --}}
@@ -751,6 +806,52 @@ function closeModalOutside(e, id) { if (e.target === document.getElementById(id)
 function toggleNotifPanel() {
   // Extend with notification panel logic as needed
 }
+
+let productIndex = 1;
+
+document.getElementById('add-product-btn')?.addEventListener('click', function () {
+
+    const list = document.getElementById('product-list');
+
+    const row = document.createElement('div');
+
+    row.className =
+        'product-row grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3';
+
+    row.innerHTML = `
+        <input
+            list="medicine-suggestions"
+            name="items[${productIndex}][medicine_name]"
+            placeholder="Medicine name"
+            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm">
+
+        <input
+            type="number"
+            min="1"
+            value="1"
+            name="items[${productIndex}][quantity]"
+            placeholder="Qty"
+            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm">
+
+        <button
+            type="button"
+            class="remove-product px-4 rounded-xl bg-red-50 text-red-600 font-bold">
+            Remove
+        </button>
+    `;
+
+    list.appendChild(row);
+
+    productIndex++;
+});
+
+document.addEventListener('click', function(e) {
+
+    if (e.target.classList.contains('remove-product')) {
+        e.target.closest('.product-row').remove();
+    }
+
+});
 </script>
 </body>
 </html>

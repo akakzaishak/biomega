@@ -22,4 +22,9 @@ class Order extends Model
     {
         return $this->hasMany(Payment::class, 'order_id', 'Tracking');
     }
+
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class, 'order_id', 'Tracking');
+    }
 }
