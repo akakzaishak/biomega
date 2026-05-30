@@ -643,15 +643,73 @@ class PortalController extends Controller
         ]);
     }
 
-    public function pharmacyDashboard()
+    public function pharmacyDashboard(Request $request)
     {
         if ($redirect = $this->requireRole('pharmacy')) return $redirect;
 
         $nif = (string) (session('user_id') ?: '');
+
+        // Handle create order from pharmacy
+        if ($request->isMethod('post') && $request->input('action') === 'create_order') {
+            $data = $request->validate([
+                'total_amount' => ['required', 'integer', 'min:0'],
+                'package_number' => ['required', 'integer', 'min:1'],
+                'item_name' => ['required', 'array', 'min:1'],
+                'item_name.*' => ['required', 'string'],
+                'item_qty' => ['required', 'array', 'min:1'],
+                'item_qty.*' => ['required', 'integer', 'min:1'],
+                'is_urgent' => ['nullable'],
+            ]);
+
+            // prepare payload like stock creation but set pharmacy_id
+            $payload = [
+                'amount' => $data['total_amount'] ?? 0,
+                'package_number' => $data['package_number'] ?? 1,
+                'item_name' => $data['item_name'] ?? [],
+                'item_qty' => $data['item_qty'] ?? [],
+                'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
+                'pharmacy_id' => $nif,
+            ];
+
+            try {
+                $tracking = $this->portal->createStockOrder($payload);
+                return redirect()->route('pharmacy.dashboard')->with('success', "Order $tracking created successfully.");
+            } catch (\Throwable $e) {
+                return back()->withInput()->with('error', 'Could not create the order.');
+            }
+        }
+
+        $data = $this->portal->pharmacyDashboard($nif);
+
+        // Enrich orders with assigned delivery person and latest location (if available)
+        $orders = $data['orders'] ?? [];
+        foreach ($orders as &$o) {
+            $assigned = DB::table('asined_order')->where('order_id', $o['order_id'])->first();
+            $dpPhone = $assigned->deliveryperson_id ?? null;
+            $o['deliveryperson_id'] = $dpPhone;
+            if ($dpPhone && Schema::hasTable('delivery_location')) {
+                $loc = DB::table('delivery_location')->where('PhoneNumber', $dpPhone)->first();
+                $o['dp_lat'] = $loc->Latitude ?? null;
+                $o['dp_lng'] = $loc->Longitude ?? null;
+            } else {
+                $o['dp_lat'] = null;
+                $o['dp_lng'] = null;
+            }
+
+            if ($dpPhone) {
+                $dp = DB::table('deliveryperson')->where('PhoneNumber', $dpPhone)->first();
+                $o['dp_first'] = $dp->FirstName ?? null;
+                $o['dp_last'] = $dp->LastName ?? null;
+            } else {
+                $o['dp_first'] = null;
+                $o['dp_last'] = null;
+            }
+        }
+
         return view('portal.role', array_merge([
             'page' => 'pharmacy',
             'userName' => $this->userName('Pharmacy'),
-        ], $this->portal->pharmacyDashboard($nif)));
+        ], $data, ['ordersEnriched' => $orders]));
     }
 
     public function stockDashboard(Request $request)
