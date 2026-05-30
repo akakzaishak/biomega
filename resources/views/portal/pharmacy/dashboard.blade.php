@@ -286,8 +286,11 @@
       </div>
 
       <div class="fade-in fade-in-1 bg-surface-container-lowest rounded-2xl border border-outline-variant/15 shadow-sm p-6 lg:p-8">
-        <form method="POST" action="{{ route('pharmacy.orders.store') }}" id="orderForm" class="space-y-8">
+        <form method="POST" action="{{ route('pharmacy.dashboard') }}" id="orderForm" class="space-y-8" onsubmit="return prepareOrderForm();">
           @csrf
+          <input type="hidden" name="action" value="create_order" />
+          <input type="hidden" name="total_amount" id="hidden_total_amount" value="0" />
+          <input type="hidden" name="package_number" value="1" />
 
           {{-- PRODUCT SELECTION --}}
           <div>
@@ -298,8 +301,8 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="products-grid">
               @forelse($products as $product)
               @php $pid = $product['product_id'] ?? $loop->index; @endphp
-              <label class="relative flex flex-col gap-3 p-4 rounded-xl border border-outline-variant/20 hover:border-primary/40 cursor-pointer transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5 product-card" data-id="{{ $pid }}">
-                <input type="checkbox" name="product_ids[]" value="{{ $pid }}" class="sr-only product-checkbox" onchange="toggleQtyInput(this, {{ $pid }})"/>
+                <label class="relative flex flex-col gap-3 p-4 rounded-xl border border-outline-variant/20 hover:border-primary/40 cursor-pointer transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5 product-card" data-id="{{ $pid }}">
+                <input type="checkbox" name="item_name[]" value="{{ $product['name'] ?? $pid }}" class="sr-only product-checkbox" onchange="toggleQtyInput(this, {{ $pid }})"/>
                 <div class="flex items-start justify-between">
                   <div>
                     <p class="font-bold text-on-surface text-sm">{{ $product['name'] ?? 'Product' }}</p>
@@ -315,7 +318,7 @@
                 </div>
                 <div class="qty-wrapper hidden mt-1">
                   <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1 block">Quantity</label>
-                  <input type="number" name="quantities[{{ $pid }}]" min="1" max="{{ $product['stock_quantity'] ?? 999 }}" value="1"
+                  <input type="number" name="item_qty[]" min="1" max="{{ $product['stock_quantity'] ?? 999 }}" value="1"
                     class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-low text-sm font-bold text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors qty-input"
                     onclick="event.preventDefault()" data-price="{{ $product['unit_price'] ?? 0 }}" data-pid="{{ $pid }}"
                     oninput="updateTotal()"/>
@@ -665,6 +668,15 @@ function validateOrder() {
     return false;
   }
   document.getElementById('no-product-error').classList.add('hidden');
+  return true;
+}
+
+function prepareOrderForm() {
+  if (!validateOrder()) return false;
+  // set hidden total
+  const totalText = document.getElementById('order-total').textContent || '0';
+  const total = parseFloat(totalText.replace(/[^0-9\.\-]/g, '')) || 0;
+  document.getElementById('hidden_total_amount').value = Math.round(total);
   return true;
 }
 

@@ -652,25 +652,55 @@ class PortalController extends Controller
 
         // Handle create order from pharmacy
         if ($request->isMethod('post') && $request->input('action') === 'create_order') {
-            $data = $request->validate([
-                'total_amount' => ['required', 'integer', 'min:0'],
-                'package_number' => ['required', 'integer', 'min:1'],
-                'item_name' => ['required', 'array', 'min:1'],
-                'item_name.*' => ['required', 'string'],
-                'item_qty' => ['required', 'array', 'min:1'],
-                'item_qty.*' => ['required', 'integer', 'min:1'],
-                'is_urgent' => ['nullable'],
-            ]);
+            // support two incoming payload shapes:
+            // 1) items[][medicine_name,quantity] (from new orders page)
+            // 2) item_name[] and item_qty[] (legacy from portal view)
 
-            // prepare payload like stock creation but set pharmacy_id
-            $payload = [
-                'amount' => $data['total_amount'] ?? 0,
-                'package_number' => $data['package_number'] ?? 1,
-                'item_name' => $data['item_name'] ?? [],
-                'item_qty' => $data['item_qty'] ?? [],
-                'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
-                'pharmacy_id' => $nif,
-            ];
+            if ($request->has('items')) {
+                $data = $request->validate([
+                    'items' => ['required', 'array', 'min:1'],
+                    'items.*.medicine_name' => ['required', 'string'],
+                    'items.*.quantity' => ['required', 'integer', 'min:1'],
+                    'total_amount' => ['nullable', 'integer', 'min:0'],
+                    'package_number' => ['nullable', 'integer', 'min:1'],
+                    'is_urgent' => ['nullable'],
+                ]);
+
+                $itemNames = [];
+                $itemQtys = [];
+                foreach ($data['items'] as $it) {
+                    $itemNames[] = $it['medicine_name'] ?? '';
+                    $itemQtys[] = (int) ($it['quantity'] ?? 1);
+                }
+
+                $payload = [
+                    'amount' => $data['total_amount'] ?? 0,
+                    'package_number' => $data['package_number'] ?? 1,
+                    'item_name' => $itemNames,
+                    'item_qty' => $itemQtys,
+                    'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
+                    'pharmacy_id' => $nif,
+                ];
+            } else {
+                $data = $request->validate([
+                    'total_amount' => ['required', 'integer', 'min:0'],
+                    'package_number' => ['required', 'integer', 'min:1'],
+                    'item_name' => ['required', 'array', 'min:1'],
+                    'item_name.*' => ['required', 'string'],
+                    'item_qty' => ['required', 'array', 'min:1'],
+                    'item_qty.*' => ['required', 'integer', 'min:1'],
+                    'is_urgent' => ['nullable'],
+                ]);
+
+                $payload = [
+                    'amount' => $data['total_amount'] ?? 0,
+                    'package_number' => $data['package_number'] ?? 1,
+                    'item_name' => $data['item_name'] ?? [],
+                    'item_qty' => $data['item_qty'] ?? [],
+                    'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
+                    'pharmacy_id' => $nif,
+                ];
+            }
 
             try {
                 $tracking = $this->portal->createStockOrder($payload);
