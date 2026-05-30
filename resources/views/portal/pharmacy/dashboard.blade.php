@@ -297,9 +297,13 @@
           <form method="POST"
             action="{{ route('pharmacy.dashboard') }}"
             id="orderForm"
-            class="space-y-8">
+            class="space-y-8"
+            onsubmit="return prepareOrderForm();">
 
             @csrf
+            <input type="hidden" name="action" value="create_order">
+            <input type="hidden" name="total_amount" id="hidden_total_amount" value="0">
+            <input type="hidden" name="package_number" value="1">
 
             {{-- PRODUCTS --}}
             <div>

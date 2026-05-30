@@ -165,7 +165,7 @@ class PortalController extends Controller
     {
         if ($redirect = $this->requireRole('admin')) return $redirect;
 
-        if ($request->isMethod('post') && $request->input('action') === 'create_order') {
+        if ($request->isMethod('post') && ($request->input('action') === 'create_order' || $request->has('items') || $request->has('item_name'))) {
             $data = $request->validate([
                 'amount' => ['nullable', 'numeric', 'min:0'],
                 'package_number' => ['nullable', 'integer', 'min:1'],
