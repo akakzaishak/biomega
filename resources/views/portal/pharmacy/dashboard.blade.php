@@ -324,25 +324,29 @@
 
                 <div id="product-list" class="space-y-3">
 
-                    <div class="product-row grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
+                  <div class="product-row grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3">
 
-                        <input
-                            list="medicine-suggestions"
-                            name="items[0][medicine_name]"
-                            placeholder="Medicine name"
-                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                    <input
+                      list="medicine-suggestions"
+                      name="items[0][medicine_name]"
+                      placeholder="Medicine name"
+                      class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
 
-                        <input
-                            type="number"
-                            min="1"
-                            value="1"
-                            name="items[0][quantity]"
-                            placeholder="Qty"
-                            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+                    <input
+                      type="number"
+                      min="1"
+                      value="1"
+                      name="items[0][quantity]"
+                      placeholder="Qty"
+                      class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
 
-                    </div>
+                    <button type="button" class="remove-product px-4 rounded-xl bg-red-50 text-red-600 font-bold hidden md:inline-block">Remove</button>
+
+                  </div>
 
                 </div>
+
+                <div id="no-product-error" class="hidden text-sm text-error font-bold mt-2">Please add at least one medicine.</div>
 
                 <button
                     type="button"
@@ -859,25 +863,25 @@ document.getElementById('add-product-btn')?.addEventListener('click', function (
         'product-row grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3';
 
     row.innerHTML = `
-        <input
-            list="medicine-suggestions"
-            name="items[${productIndex}][medicine_name]"
-            placeholder="Medicine name"
-            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm">
+      <input
+        list="medicine-suggestions"
+        name="items[${productIndex}][medicine_name]"
+        placeholder="Medicine name"
+        class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
 
-        <input
-            type="number"
-            min="1"
-            value="1"
-            name="items[${productIndex}][quantity]"
-            placeholder="Qty"
-            class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm">
+      <input
+        type="number"
+        min="1"
+        value="1"
+        name="items[${productIndex}][quantity]"
+        placeholder="Qty"
+        class="w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none">
 
-        <button
-            type="button"
-            class="remove-product px-4 rounded-xl bg-red-50 text-red-600 font-bold">
-            Remove
-        </button>
+      <button
+        type="button"
+        class="remove-product px-4 rounded-xl bg-red-50 text-red-600 font-bold">
+        Remove
+      </button>
     `;
 
     list.appendChild(row);
@@ -887,9 +891,23 @@ document.getElementById('add-product-btn')?.addEventListener('click', function (
 
 document.addEventListener('click', function(e) {
 
-    if (e.target.classList.contains('remove-product')) {
-        e.target.closest('.product-row').remove();
+  if (e.target.classList.contains('remove-product')) {
+    const list = document.getElementById('product-list');
+    if (!list) return;
+
+    // Prevent removing the last row — show a friendly error instead
+    if (list.children.length <= 1) {
+      const err = document.getElementById('no-product-error');
+      if (err) {
+        err.classList.remove('hidden');
+        list.classList.add('shake');
+        setTimeout(() => list.classList.remove('shake'), 400);
+      }
+      return;
     }
+
+    e.target.closest('.product-row').remove();
+  }
 
 });
 </script>
