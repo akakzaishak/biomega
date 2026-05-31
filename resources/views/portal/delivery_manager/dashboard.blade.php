@@ -106,6 +106,7 @@
       <a href="{{ route('delivery-manager.dashboard') }}" class="bg-blue-50 text-blue-700 rounded-lg font-bold flex items-center gap-3 px-3 py-2.5 hover:translate-x-1 transition-transform"><span class="material-symbols-outlined">dashboard</span><span class="text-sm">Dashboard</span></a>
       <a href="#orders-section" class="text-slate-600 hover:bg-slate-100 flex items-center gap-3 px-3 py-2.5 rounded-lg hover:translate-x-1 transition-transform"><span class="material-symbols-outlined">package_2</span><span class="text-sm">Orders</span></a>
       <a href="#dp-section" class="text-slate-600 hover:bg-slate-100 flex items-center gap-3 px-3 py-2.5 rounded-lg hover:translate-x-1 transition-transform"><span class="material-symbols-outlined">local_shipping</span><span class="text-sm">Delivery Persons</span></a>
+      <a href="{{ route('delivery-manager.tracking') }}" class="text-slate-600 hover:bg-slate-100 flex items-center gap-3 px-3 py-2.5 rounded-lg hover:translate-x-1 transition-transform"><span class="material-symbols-outlined">location_on</span><span class="text-sm">Live Tracking</span></a>
       <a href="{{ route('logout') }}" class="text-red-500 hover:bg-red-50 flex items-center gap-3 px-3 py-2.5 rounded-lg hover:translate-x-1 transition-transform mt-2"><span class="material-symbols-outlined">logout</span><span class="text-sm font-bold">Logout</span></a>
     </nav>
   </aside>
@@ -221,6 +222,7 @@
       </div>
       @endif
     </div>
+
   </main>
 </div>
 

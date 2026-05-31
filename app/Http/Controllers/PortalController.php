@@ -489,13 +489,126 @@ class PortalController extends Controller
         ]));
     }
 
-    public function commercialDashboard()
+    public function commercialDashboard(Request $request)
     {
         if ($redirect = $this->requireRole('commercialservice')) return $redirect;
 
-        return view('portal.role', array_merge([
+        $firstname = (string) session('firstname', 'Commercial');
+        $lastname = (string) session('lastname', '');
+        $success = '';
+        $error = '';
+
+        // Handle achat POST
+        if ($request->isMethod('post') && $request->input('action') === 'achat') {
+            $pharmacy_id = $request->input('pharmacy_id');
+            $ids = $request->input('link_ids', []);
+
+            if (empty($ids) || !is_array($ids)) {
+                $error = 'Aucun article sélectionné pour l\'achat.';
+            } else {
+                // ensure column exists
+                if (!\Illuminate\Support\Facades\Schema::hasColumn('order_item_link', 'achat')) {
+                    \Illuminate\Support\Facades\Schema::table('order_item_link', function (\Illuminate\Database\Schema\Blueprint $table) {
+                        $table->tinyInteger('achat')->default(0);
+                    });
+                }
+
+                try {
+                    DB::table('order_item_link')->whereIn('ID', $ids)->update(['achat' => 1]);
+                    $success = 'Achat confirmé pour ' . count($ids) . ' article(s).';
+                    return redirect()->route('commercial.dashboard')->with('success', $success);
+                } catch (\Throwable $e) {
+                    $error = 'Erreur lors de la confirmation : ' . $e->getMessage();
+                }
+            }
+        }
+
+        // Ensure achat column exists for display
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('order_item_link', 'achat')) {
+            try {
+                \Illuminate\Support\Facades\Schema::table('order_item_link', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->tinyInteger('achat')->default(0);
+                });
+            } catch (\Throwable $e) {
+                // ignore if cannot alter
+            }
+        }
+
+        // Fetch rows grouped by pharmacy
+        $rows = DB::table('order_item_link as oil')
+            ->leftJoin('orderitem as oi', 'oi.ID', '=', 'oil.orderitem_id')
+            ->leftJoin('pharmacy as p', 'p.NIF', '=', 'oil.pharmacy_id')
+            ->select([
+                // Quote the ID identifier to match the migrations which use 'ID' (preserve case)
+                DB::raw('"oil"."ID" as link_id'),
+                'oil.pharmacy_id',
+                'oil.orderitem_id',
+                DB::raw('oil.contiti as contiti'),
+                'oil.achat',
+                DB::raw('"oi"."Name" as item_name'),
+                DB::raw('"oi"."contiti" as stock_contiti'),
+                DB::raw('"p"."FirstName" as pharm_first'),
+                DB::raw('"p"."LastName" as pharm_last'),
+                DB::raw('"p"."PhoneNumber" as pharm_phone'),
+                DB::raw('"p"."Location" as pharm_location'),
+                DB::raw('"p"."NIF" as pharm_nif'),
+            ])
+            ->orderBy('oil.pharmacy_id', 'asc')
+            // Order by the alias `link_id` to avoid case-insensitive identifier issues on PG
+            ->orderByRaw('link_id asc')
+            ->get()
+            ->map(fn($r) => (array) $r)
+            ->toArray();
+
+        $pharmacies_orders = [];
+        foreach ($rows as $row) {
+            $pid = (string) ($row['pharmacy_id'] ?? '');
+            if ($pid === '') $pid = 'unknown';
+            if (!isset($pharmacies_orders[$pid])) {
+                $pharmacies_orders[$pid] = [
+                    'pharmacy_id' => $pid,
+                    'pharm_nif' => $row['pharm_nif'] ?? $pid,
+                    'pharm_first' => $row['pharm_first'] ?? null,
+                    'pharm_last' => $row['pharm_last'] ?? null,
+                    'pharm_phone' => $row['pharm_phone'] ?? null,
+                    'pharm_location' => $row['pharm_location'] ?? null,
+                    'items' => [],
+                ];
+            }
+
+            $pharmacies_orders[$pid]['items'][] = [
+                'link_id' => $row['link_id'] ?? null,
+                'orderitem_id' => $row['orderitem_id'] ?? null,
+                'item_name' => $row['item_name'] ?? '—',
+                'contiti' => (int) ($row['contiti'] ?? 0),
+                'stock_contiti' => (int) ($row['stock_contiti'] ?? 0),
+                'achat' => (int) ($row['achat'] ?? 0),
+            ];
+        }
+
+        // Stats
+        $total_pharmacies = count($pharmacies_orders);
+        $total_items = 0;
+        $total_achat = 0;
+        foreach ($pharmacies_orders as $po) {
+            $total_items += count($po['items']);
+            $total_achat += count(array_filter($po['items'], fn($i) => ($i['achat'] ?? 0) === 1));
+        }
+        $total_pending = $total_items - $total_achat;
+
+        // Merge service data and render view
+        return view('portal.commercial.dashboard', array_merge([
             'page' => 'commercial',
             'userName' => $this->userName('Commercial'),
+            'firstname' => $firstname,
+            'lastname' => $lastname,
+            'success' => session('success') ?? $success,
+            'error' => session('error') ?? $error,
+            'pharmacies_orders' => $pharmacies_orders,
+            'total_pharmacies' => $total_pharmacies,
+            'total_items' => $total_items,
+            'total_achat' => $total_achat,
+            'total_pending' => $total_pending,
         ], $this->portal->commercialDashboard()));
     }
 
@@ -554,18 +667,18 @@ class PortalController extends Controller
                 'o.*',
                 'a.deliveryperson_id',
                 DB::raw('a.pharmacy_id AS assigned_pharmacy'),
-                DB::raw('d.FirstName AS dp_first'),
-                DB::raw('d.LastName AS dp_last'),
-                DB::raw('p.FirstName AS ph_first'),
-                DB::raw('p.LastName AS ph_last'),
-                DB::raw('p.Location AS ph_loc'),
+                DB::raw('"d"."FirstName" AS dp_first'),
+                DB::raw('"d"."LastName" AS dp_last'),
+                DB::raw('"p"."FirstName" AS ph_first'),
+                DB::raw('"p"."LastName" AS ph_last'),
+                DB::raw('"p"."Location" AS ph_loc'),
             ])
             ->get()
             ->map(static fn ($row) => (array) $row)
             ->toArray();
 
         $deliveryPersons = DB::table('deliveryperson')
-            ->orderBy('FirstName')
+            ->orderByRaw('"FirstName" asc')
             ->get()
             ->map(static fn ($row) => (array) $row)
             ->toArray();
@@ -588,6 +701,35 @@ class PortalController extends Controller
             'assigned' => $assigned,
             'unassigned' => $unassigned,
         ]);
+    }
+
+    public function deliveryManagerTracking(Request $request)
+    {
+        if ($redirect = $this->requireRole('deliverymanager')) return $redirect;
+
+        $firstname = (string) session('firstname', 'Manager');
+        $lastname = (string) session('lastname', '');
+        $managerName = trim($firstname . ' ' . $lastname);
+
+        if ($request->isMethod('post') && $request->filled('force_gps_phone')) {
+            $phone = trim((string) $request->input('force_gps_phone', ''));
+
+            if ($phone !== '') {
+                $this->portal->forceDeliveryGps($phone, $managerName);
+
+                return redirect()->route('delivery-manager.tracking', ['forced' => $phone]);
+            }
+        }
+
+        $tracking = $this->portal->trackingDashboardData();
+
+        return view('portal.delivery_manager.tracking', array_merge([
+            'page' => 'delivery-manager-tracking',
+            'managerName' => $managerName,
+            'firstname' => $firstname,
+            'lastname' => $lastname,
+            'forcedMsg' => $request->query('forced'),
+        ], $tracking));
     }
 
     public function deliveryPersonDashboard(Request $request)
@@ -724,36 +866,64 @@ class PortalController extends Controller
 
         // Handle create order from pharmacy
         if ($request->isMethod('post') && $request->input('action') === 'create_order') {
-            // support two incoming payload shapes:
-            // 1) items[][medicine_name,quantity] (from new orders page)
-            // 2) item_name[] and item_qty[] (legacy from portal view)
+            // Support multiple incoming shapes:
+            // - Legacy: items[n][orderitem_id], items[n][contiti]
+            // - New: items[n][medicine_name], items[n][quantity]
+            // - Alternative: item_name[] + item_qty[] arrays
+
+            $payload = null;
 
             if ($request->has('items')) {
-                $data = $request->validate([
-                    'items' => ['required', 'array', 'min:1'],
-                    'items.*.medicine_name' => ['required', 'string'],
-                    'items.*.quantity' => ['required', 'integer', 'min:1'],
-                    'total_amount' => ['nullable', 'integer', 'min:0'],
-                    'package_number' => ['nullable', 'integer', 'min:1'],
-                    'is_urgent' => ['nullable'],
-                ]);
+                $incoming = $request->input('items', []);
 
-                $itemNames = [];
-                $itemQtys = [];
-                foreach ($data['items'] as $it) {
-                    $itemNames[] = $it['medicine_name'] ?? '';
-                    $itemQtys[] = (int) ($it['quantity'] ?? 1);
+                // If first item contains orderitem_id -> legacy path
+                $first = is_array($incoming) && count($incoming) > 0 ? $incoming[array_key_first($incoming)] : null;
+                if (is_array($first) && array_key_exists('orderitem_id', $first)) {
+                    $data = $request->validate([
+                        'items' => ['required', 'array', 'min:1'],
+                        'items.*.orderitem_id' => ['required', 'integer', 'min:1'],
+                        'items.*.contiti' => ['required', 'integer', 'min:1'],
+                        'total_amount' => ['nullable', 'integer', 'min:0'],
+                        'package_number' => ['nullable', 'integer', 'min:1'],
+                        'is_urgent' => ['nullable'],
+                    ]);
+
+                    $payload = [
+                        'items' => $data['items'],
+                        'amount' => $data['total_amount'] ?? 0,
+                        'package_number' => $data['package_number'] ?? 1,
+                        'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
+                        'pharmacy_id' => $nif,
+                    ];
+                } else {
+                    // New structured items with medicine_name and quantity
+                    $data = $request->validate([
+                        'items' => ['required', 'array', 'min:1'],
+                        'items.*.medicine_name' => ['required', 'string'],
+                        'items.*.quantity' => ['required', 'integer', 'min:1'],
+                        'total_amount' => ['nullable', 'integer', 'min:0'],
+                        'package_number' => ['nullable', 'integer', 'min:1'],
+                        'is_urgent' => ['nullable'],
+                    ]);
+
+                    $itemNames = [];
+                    $itemQtys = [];
+                    foreach ($data['items'] as $it) {
+                        $itemNames[] = $it['medicine_name'] ?? '';
+                        $itemQtys[] = (int) ($it['quantity'] ?? 1);
+                    }
+
+                    $payload = [
+                        'amount' => $data['total_amount'] ?? 0,
+                        'package_number' => $data['package_number'] ?? 1,
+                        'item_name' => $itemNames,
+                        'item_qty' => $itemQtys,
+                        'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
+                        'pharmacy_id' => $nif,
+                    ];
                 }
-
-                $payload = [
-                    'amount' => $data['total_amount'] ?? 0,
-                    'package_number' => $data['package_number'] ?? 1,
-                    'item_name' => $itemNames,
-                    'item_qty' => $itemQtys,
-                    'is_urgent' => !empty($data['is_urgent']) ? 1 : 0,
-                    'pharmacy_id' => $nif,
-                ];
             } else {
+                // Alternative array shape: item_name[] + item_qty[]
                 $data = $request->validate([
                     'total_amount' => ['required', 'integer', 'min:0'],
                     'package_number' => ['required', 'integer', 'min:1'],
@@ -807,6 +977,40 @@ class PortalController extends Controller
                 $o['dp_first'] = null;
                 $o['dp_last'] = null;
             }
+
+            // Load order items from order_item_link (legacy behaviour)
+            $o['items'] = [];
+            if (!empty($o['order_id'])) {
+                $orderId = (string) $o['order_id'];
+                // Mirror legacy: ensure the asined_order exists for this pharmacy and order
+                $itemsQ = DB::table('order_item_link as oil')
+                    ->join('orderitem as oi', 'oil.orderitem_id', '=', 'oi.ID')
+                    ->join('asined_order as ao', function ($join) use ($nif, $orderId) {
+                        $join->on('ao.pharmacy_id', '=', DB::raw("'" . addslashes($nif) . "'"))
+                             ->on('ao.order_id', '=', DB::raw("'" . addslashes($orderId) . "'"));
+                    })
+                    ->where('oil.pharmacy_id', $nif)
+                    ->select(['oi.ID', 'oi.Name', 'oil.contiti'])
+                    ->get();
+
+                foreach ($itemsQ as $ir) {
+                    $o['items'][] = (array) $ir;
+                }
+            }
+
+            // Payment & status fields expected by the legacy view
+            $o['payment_method'] = $o['payment_method'] ?? 'CASH';
+            $o['payment_status'] = (int) ($o['Status'] ?? 0) >= 1 ? 'PAID' : 'UNPAID';
+            $statusMap = [
+                0 => (empty($o['deliveryperson_id']) ? 'PENDING_COMMERCIAL_REVIEW' : 'ASSIGNED_TO_DELIVERY'),
+                1 => 'COMPLETED',
+                2 => 'IN_TRANSIT',
+                3 => 'DELIVERED',
+            ];
+            $o['status'] = $statusMap[(int) ($o['Status'] ?? 0)] ?? ($o['status'] ?? 'PENDING_COMMERCIAL_REVIEW');
+            $o['status_history'] = $o['status_history'] ?? [];
+            $o['delivery_person_name'] = trim((string) ($o['dp_first'] ?? '') . ' ' . (string) ($o['dp_last'] ?? '')) ?: null;
+            $o['delivery_person_phone'] = $o['deliveryperson_id'] ?? null;
         }
 
         return view('portal.pharmacy.dashboard', array_merge([
@@ -814,7 +1018,10 @@ class PortalController extends Controller
             'userName' => $this->userName('Pharmacy'),
             'pharmacyName' => $this->userName('Pharmacy'),
             'medicineSuggestions' => $this->portal->medicineSuggestions(),
+            'pharmacyNifSafe' => (string) $nif,
         ], $data, ['orders' => $orders]));
+        // ensure view has pharmacyNifSafe for legacy hidden inputs
+        // (array_merge order preserved above)
     }
 
     public function stockDashboard(Request $request)
@@ -866,7 +1073,7 @@ class PortalController extends Controller
             }
         }
 
-        return view('portal.role', array_merge([
+        return view('portal.stock_employee.dashboard', array_merge([
             'page' => 'stock',
             'userName' => $this->userName('Stock'),
         ], $this->portal->stockDashboard()));

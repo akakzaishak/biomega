@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 class AsinedOrder extends Model
 {
     protected $table = 'asined_order';
+    protected $primaryKey = 'ID';
+    public $incrementing = true;
+    protected $keyType = 'int';
     public $timestamps = false;
     protected $fillable = ['order_id','pharmacy_id','deliveryperson_id'];
 

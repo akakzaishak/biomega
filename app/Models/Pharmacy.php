@@ -9,7 +9,7 @@ class Pharmacy extends Model
     protected $table = 'pharmacy';
     protected $primaryKey = 'NIF';
     public $incrementing = false;
-    protected $keyType = 'string';
+        protected $keyType = 'string';
     public $timestamps = false;
     protected $fillable = ['NIF','FirstName','LastName','PhoneNumber','WorkTime','Password','Location','Role'];
 

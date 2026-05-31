@@ -26,7 +26,7 @@ class PortalDemoSeeder extends Seeder
                 'FirstName' => 'Demo',
                 'LastName' => 'Pharmacy',
                 'PhoneNumber' => '0710000002',
-                'WorkTime' => '08:00 - 18:00',
+                'WorkTime' => '08:00:00',
                 'Password' => Hash::make('pharmacy123'),
                 'Location' => 'Algiers',
                 'Role' => 'pharmacy',
@@ -78,7 +78,7 @@ class PortalDemoSeeder extends Seeder
             [
                 'QRCode' => 'QR-BMP-DEMO-001',
                 'Date' => now()->toDateString(),
-                'otalAmount' => 125.50,
+                'otalAmount' => 125,
                 'ProofImage' => '',
                 'PackageNumber' => 2,
                 'Status' => 0,
@@ -91,7 +91,7 @@ class PortalDemoSeeder extends Seeder
             ['order_id' => 'BMP-DEMO-001'],
             [
                 'pharmacy_id' => '1001',
-                'deliveryperson_id' => 1,
+                'deliveryperson_id' => '0710000005',
             ]
         );
 
@@ -109,8 +109,6 @@ class PortalDemoSeeder extends Seeder
                 'amount' => 125.50,
                 'method' => 'cash',
                 'status' => 'paid',
-                'created_at' => now(),
-                'updated_at' => now(),
             ]
         );
     }

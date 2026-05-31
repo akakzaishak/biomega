@@ -22,6 +22,8 @@ Route::get('/admin/payments', [PortalController::class, 'adminPayments'])->name(
 
 Route::get('/commercial/dashboard', [PortalController::class, 'commercialDashboard'])->name('commercial.dashboard');
 Route::match(['get', 'post'], '/delivery-manager/dashboard', [PortalController::class, 'deliveryManagerDashboard'])->name('delivery-manager.dashboard');
+Route::match(['get', 'post'], '/delivery-manager/tracking', [PortalController::class, 'deliveryManagerTracking'])->name('delivery-manager.tracking');
+Route::match(['get', 'post'], '/deliverymanager_tracking.php', [PortalController::class, 'deliveryManagerTracking'])->name('delivery-manager.tracking.legacy');
 Route::match(['get', 'post'], '/delivery-person/dashboard', [PortalController::class, 'deliveryPersonDashboard'])->name('delivery-person.dashboard');
 Route::match(['get','post'], '/pharmacy/dashboard', [PortalController::class, 'pharmacyDashboard'])->name('pharmacy.dashboard');
 Route::match(['get', 'post'], '/stock/dashboard', [PortalController::class, 'stockDashboard'])->name('stock.dashboard');
