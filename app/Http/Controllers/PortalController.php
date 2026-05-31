@@ -818,18 +818,18 @@ class PortalController extends Controller
             ->orderByDesc('o.Status')
             ->orderByDesc('o.Date')
             ->select([
-                DB::raw('ao.order_id AS tracking'),
-                DB::raw('ao.pharmacy_id AS pharmacy_nif'),
-                DB::raw('o.PackageNumber AS packages'),
-                DB::raw('o.otalAmount AS amount'),
-                DB::raw('o.Date AS order_date'),
-                DB::raw('o.Status AS status'),
-                DB::raw('o.IsUrgen AS urgent'),
-                DB::raw('o.ProofImage AS proof'),
-                DB::raw('p.FirstName AS pharm_first'),
-                DB::raw('p.LastName AS pharm_last'),
-                DB::raw('p.PhoneNumber AS pharm_phone'),
-                DB::raw('p.Location AS pharm_location'),
+                DB::raw('"ao"."order_id" AS "tracking"'),
+                DB::raw('"ao"."pharmacy_id" AS "pharmacy_nif"'),
+                DB::raw('"o"."PackageNumber" AS "packages"'),
+                DB::raw('"o"."otalAmount" AS "amount"'),
+                DB::raw('"o"."Date" AS "order_date"'),
+                DB::raw('"o"."Status" AS "status"'),
+                DB::raw('"o"."IsUrgen" AS "urgent"'),
+                DB::raw('"o"."ProofImage" AS "proof"'),
+                DB::raw('"p"."FirstName" AS "pharm_first"'),
+                DB::raw('"p"."LastName" AS "pharm_last"'),
+                DB::raw('"p"."PhoneNumber" AS "pharm_phone"'),
+                DB::raw('"p"."Location" AS "pharm_location"'),
             ])
             ->get()
             ->map(static fn ($row) => (array) $row)

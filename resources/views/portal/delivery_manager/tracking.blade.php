@@ -316,7 +316,35 @@ let showRoutes = true, isSatellite = false;
 
 function initMap() {
   map = L.map('map', { zoomControl: true }).setView(DEFAULT_CENTER, 12);
-  tileNormal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
+  const osmUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const osmHot = 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
+  const cartoUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
+  // Primary (OSM) tile layer with subdomains; we'll swap immediately on tile errors
+  tileNormal = L.tileLayer(osmUrl, { attribution: '© OpenStreetMap contributors', maxZoom: 19, subdomains: ['a','b','c'] });
+  let tileErrorCount = 0;
+
+  // small overlay to show tile error count when debugging
+  const debugOverlay = L.DomUtil.create('div', 'map-tile-debug');
+  Object.assign(debugOverlay.style, { position:'absolute', right:'12px', top:'12px', zIndex:9999, background:'rgba(255,255,255,0.85)', padding:'6px 10px', borderRadius:'8px', fontSize:'12px', color:'#111', boxShadow:'0 4px 18px rgba(0,0,0,.12)', display:'none' });
+  document.getElementById('map').appendChild(debugOverlay);
+
+  tileNormal.on('tileerror', function (err) {
+    tileErrorCount++;
+    console.warn('Tile error', err);
+    debugOverlay.style.display = 'block';
+    debugOverlay.innerText = `Tile errors: ${tileErrorCount}`;
+    // on first few errors, attempt alternative OSM hot, then Carto
+    if (tileErrorCount === 1) {
+      try { map.removeLayer(tileNormal); } catch (e) {}
+      tileNormal = L.tileLayer(osmHot, { attribution: '© OpenStreetMap contributors', maxZoom: 19, subdomains: ['a','b','c'] }).addTo(map);
+      console.info('Switched to OSM HOT tiles');
+    } else if (tileErrorCount > 3) {
+      try { map.removeLayer(tileNormal); } catch (e) {}
+      tileNormal = L.tileLayer(cartoUrl, { attribution: '© Carto, © OpenStreetMap', maxZoom: 19 }).addTo(map);
+      console.info('Switched to Carto tiles');
+    }
+  });
+  tileNormal.addTo(map);
   tileSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 });
   renderAll();
 }
