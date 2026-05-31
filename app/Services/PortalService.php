@@ -491,6 +491,62 @@ class PortalService
             ->toArray();
     }
 
+    public function adminPharmaciesData(string $search = ''): array
+    {
+        $query = DB::table('pharmacy')
+            ->select(['NIF', 'FirstName', 'LastName', 'PhoneNumber', 'WorkTime', 'Location'])
+            ->orderBy('NIF', 'asc');
+
+        $search = trim($search);
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('NIF', 'like', $like)
+                    ->orWhere('FirstName', 'like', $like)
+                    ->orWhere('LastName', 'like', $like)
+                    ->orWhere('PhoneNumber', 'like', $like)
+                    ->orWhere('Location', 'like', $like);
+            });
+        }
+
+        $pharmacies = $query->get()->map(fn ($row) => (array) $row)->toArray();
+
+        $orderData = [];
+        foreach ($pharmacies as $pharmacy) {
+            $nif = (string) ($pharmacy['NIF'] ?? '');
+
+            $rows = DB::table('asined_order as ao')
+                ->leftJoin('order as o', 'ao.order_id', '=', 'o.Tracking')
+                ->where('ao.pharmacy_id', $nif)
+                ->orderByDesc('o.Date')
+                ->select([
+                    'ao.order_id',
+                    'ao.deliveryperson_id',
+                    'o.Status',
+                    'o.Date',
+                    'o.IsUrgen',
+                    'o.Tracking',
+                ])
+                ->get()
+                ->map(fn ($row) => (array) $row)
+                ->toArray();
+
+            $orderData[(int) $nif] = [
+                'total' => count($rows),
+                'orders' => $rows,
+                'delivered' => count(array_filter($rows, fn ($r) => (int) ($r['Status'] ?? -1) === 1)),
+                'pending' => count(array_filter($rows, fn ($r) => (int) ($r['Status'] ?? -1) === 0)),
+                'urgent' => count(array_filter($rows, fn ($r) => (int) ($r['IsUrgen'] ?? 0) === 1)),
+            ];
+        }
+
+        return [
+            'pharmacies' => $pharmacies,
+            'order_data' => $orderData,
+            'query' => $search,
+        ];
+    }
+
     public function createEmployee(string $role, array $data): void
     {
         $tableMap = [

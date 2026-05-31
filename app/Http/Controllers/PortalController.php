@@ -288,14 +288,51 @@ class PortalController extends Controller
         }
     }
 
-    public function adminPharmacies()
+    public function adminPharmacies(Request $request)
     {
         if ($redirect = $this->requireRole('admin')) return $redirect;
 
+        if ($request->isMethod('post') && $request->filled('delete_nif')) {
+            $nif = trim((string) $request->input('delete_nif', ''));
+
+            if ($nif !== '') {
+                $hasOrders = DB::table('asined_order')
+                    ->where('pharmacy_id', $nif)
+                    ->count() > 0;
+
+                if ($hasOrders && !$request->boolean('force_delete')) {
+                    return redirect()
+                        ->route('admin.pharmacies', ['q' => (string) $request->input('q', '')])
+                        ->with('error', 'Cette pharmacie possède des commandes assignées. Confirmez la suppression forcée.')
+                        ->with('pending_delete_nif', $nif);
+                }
+
+                try {
+                    $deleted = $this->portal->deletePharmacy($nif);
+
+                    if ($deleted) {
+                        $request->session()->forget('pending_delete_nif');
+                        return redirect()
+                            ->route('admin.pharmacies', ['q' => (string) $request->input('q', '')])
+                            ->with('success', "Pharmacie #{$nif} supprimée avec succès.");
+                    }
+
+                    return redirect()
+                        ->route('admin.pharmacies', ['q' => (string) $request->input('q', '')])
+                        ->with('error', 'Pharmacy not found.');
+                } catch (\Throwable $e) {
+                    return redirect()
+                        ->route('admin.pharmacies', ['q' => (string) $request->input('q', '')])
+                        ->with('error', 'Erreur lors de la suppression.');
+                }
+            }
+        }
+
+        $data = $this->portal->adminPharmaciesData((string) $request->query('q', ''));
+
         return view('portal.admin', array_merge(['userName' => $this->userName('Admin')], $this->portal->adminCommon(), [
             'page' => 'pharmacies',
-            'pharmacies' => $this->portal->pharmacyOrderCounts(),
-        ]));
+        ], $data));
     }
 
     public function deletePharmacy(string $nif)
@@ -305,11 +342,12 @@ class PortalController extends Controller
         try {
             $deleted = $this->portal->deletePharmacy($nif);
             if ($deleted) {
-                return back()->with('success', 'Pharmacy deleted.');
+                request()->session()->forget('pending_delete_nif');
+                return redirect()->route('admin.pharmacies')->with('success', "Pharmacie #{$nif} supprimée avec succès.");
             }
-            return back()->with('error', 'Pharmacy not found.');
+            return redirect()->route('admin.pharmacies')->with('error', 'Pharmacy not found.');
         } catch (\Throwable $e) {
-            return back()->with('error', 'Could not delete pharmacy.');
+            return redirect()->route('admin.pharmacies')->with('error', 'Erreur lors de la suppression.');
         }
     }
 

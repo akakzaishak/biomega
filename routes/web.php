@@ -11,7 +11,7 @@ Route::match(['get', 'post'], '/register-pharmacy', [PortalController::class, 'r
 Route::get('/admin/dashboard', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
 Route::match(['get', 'post'], '/admin/orders', [PortalController::class, 'adminOrders'])->name('admin.orders');
 Route::post('/admin/orders/{tracking}/complete', [PortalController::class, 'completeOrder'])->name('admin.orders.complete');
-Route::get('/admin/pharmacies', [PortalController::class, 'adminPharmacies'])->name('admin.pharmacies');
+Route::match(['get', 'post'], '/admin/pharmacies', [PortalController::class, 'adminPharmacies'])->name('admin.pharmacies');
 Route::post('/admin/pharmacies/{nif}/delete', [PortalController::class, 'deletePharmacy'])->name('admin.pharmacies.delete');
 Route::match(['get', 'post'], '/admin/employees', [PortalController::class, 'adminEmployees'])->name('admin.employees');
 Route::match(['get', 'post'], '/admin/tracking', [PortalController::class, 'adminTracking'])->name('admin.tracking');

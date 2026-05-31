@@ -4,6 +4,21 @@
     $search = $query ?? '';
 @endphp
 
+<style>
+  .pharm-row:hover { background: #f3f4f5; }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+</style>
+
 <div class="fade-in">
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
@@ -27,10 +42,11 @@
       <span class="material-symbols-outlined">error</span>
       {{ session('error') }}
       @if(session('pending_delete_nif'))
-        <form method="POST" class="ml-auto flex-shrink-0">
+        <form method="POST" action="{{ route('admin.pharmacies') }}" class="ml-auto flex-shrink-0">
           @csrf
           <input type="hidden" name="delete_nif" value="{{ session('pending_delete_nif') }}" />
           <input type="hidden" name="force_delete" value="1" />
+          <input type="hidden" name="q" value="{{ $search }}" />
           <button type="submit" class="bg-error text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90">Forcer la suppression</button>
         </form>
       @endif
@@ -148,7 +164,7 @@
                   @if(($data['total'] ?? 0) === 0)
                     <span class="status-pill bg-surface-container text-on-surface-variant"><span class="material-symbols-outlined text-xs">remove</span> Aucune</span>
                   @else
-                    <button onclick='openOrders({{ $nif }}, {!! json_encode($data['orders']) !!})' class="inline-flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-xs font-bold transition-colors mb-1.5"> <span class="material-symbols-outlined text-sm">package_2</span> {{ $data['total'] }} commande{{ $data['total']>1 ? 's' : '' }}</button>
+                    <button onclick='openOrders({{ $nif }}, @js($data['orders']))' class="inline-flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-xs font-bold transition-colors mb-1.5"> <span class="material-symbols-outlined text-sm">package_2</span> {{ $data['total'] }} commande{{ $data['total']>1 ? 's' : '' }}</button>
                     <div class="flex flex-wrap gap-1.5">
                       @if(($data['delivered'] ?? 0) > 0)
                         <span class="status-pill bg-green-100 text-green-700">✓ {{ $data['delivered'] }} livrée{{ $data['delivered']>1 ? 's' : '' }}</span>
@@ -164,7 +180,7 @@
                 </td>
                 <td class="px-5 py-4 text-center">
                   <div class="flex items-center justify-center gap-1">
-                    <button onclick='confirmDelete({{ $nif }}, "{{ addslashes($p['FirstName'] ?? '') }} {{ addslashes($p['LastName'] ?? '') }}", {{ $data['total'] ?? 0 }})' class="p-2 rounded-lg hover:bg-error-container text-error transition-colors" title="Supprimer"><span class="material-symbols-outlined text-lg">delete</span></button>
+                    <button onclick='confirmDelete({{ $nif }}, @js(($p['FirstName'] ?? '')." ".($p['LastName'] ?? '')), {{ $data['total'] ?? 0 }})' class="p-2 rounded-lg hover:bg-error-container text-error transition-colors" title="Supprimer"><span class="material-symbols-outlined text-lg">delete</span></button>
                   </div>
                 </td>
               </tr>
@@ -196,9 +212,10 @@
       <span id="modalOrdersText"></span>
     </div>
     <p class="text-xs text-on-surface-variant text-center mb-6">Cette action est <strong>irréversible</strong>. Les assignations liées seront aussi supprimées.</p>
-    <form method="POST" id="deleteForm" action="">
+    <form method="POST" id="deleteForm" action="{{ route('admin.pharmacies') }}">
       @csrf
       <input type="hidden" name="delete_nif" id="deleteNifInput" value="" />
+      <input type="hidden" name="q" value="{{ $search }}" />
       <div class="flex gap-3">
         <button type="button" onclick="closeDeleteModal()" class="flex-1 px-5 py-3 border border-outline-variant/40 rounded-xl font-semibold text-sm text-on-surface hover:bg-surface-container transition-colors">Annuler</button>
         <button type="submit" class="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-error text-white rounded-xl font-bold text-sm hover:opacity-90 active:scale-95 transition-all"><span class="material-symbols-outlined text-lg">delete</span>Supprimer</button>
@@ -236,15 +253,7 @@ function confirmDelete(nif, name, orderCount) {
     warn.classList.add('hidden');
     warn.classList.remove('flex');
   }
-  const modal = document.getElementById('deleteModal');
-  // set the form action to include the nif in the URL (route expects /admin/pharmacies/{nif}/delete)
-  try {
-    const form = document.getElementById('deleteForm');
-    form.action = '{{ url("/admin/pharmacies") }}' + '/' + encodeURIComponent(nif) + '/delete';
-  } catch (e) {
-    // fallback: do nothing
-  }
-  modal.classList.remove('hidden');
+  document.getElementById('deleteModal').classList.remove('hidden');
 }
 function closeDeleteModal() { document.getElementById('deleteModal').classList.add('hidden'); }
 
@@ -272,7 +281,7 @@ function openOrders(nif, orders) {
         </div>\
         <div class="text-right flex flex-col items-end gap-1">\
           ${statusLabel(o.Status)}\
-          ${parseInt(o.IsUrgen)===1 ? '<span class="status-pill bg-error-container text-error'>🚨 Urgent</span>' : ''}\
+          ${parseInt(o.IsUrgen)===1 ? '<span class="status-pill bg-error-container text-error">🚨 Urgent</span>' : ''}\
         </div>\
       </div>\
     `).join('');
