@@ -1,4 +1,14 @@
 <div class="relative z-10 w-full max-w-3xl mx-auto bg-white rounded-3xl p-8 shadow-[0_24px_60px_-20px_rgba(0,94,164,0.2)] border border-slate-100">
+    <button
+        type="button"
+        onclick="closeRegistration()"
+        class="absolute top-4 right-4 w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+        aria-label="Close and go back"
+        title="Close"
+    >
+        <span class="material-symbols-outlined">close</span>
+    </button>
+
     <p class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider mb-5">
         <span class="material-symbols-outlined text-sm">app_registration</span>
         Pharmacy Registration
@@ -158,6 +168,15 @@
 </p>
 
 <script>
+    function closeRegistration() {
+        if (window.history.length > 1) {
+            window.history.back();
+            return;
+        }
+
+        window.location.href = @js(route('login'));
+    }
+
     function togglePwd(inputId, iconId) {
         const input = document.getElementById(inputId);
         const icon = document.getElementById(iconId);

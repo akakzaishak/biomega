@@ -500,16 +500,49 @@ class PortalService
         $search = trim($search);
         if ($search !== '') {
             $like = '%' . $search . '%';
-            $query->where(function ($q) use ($like) {
-                $q->where('NIF', 'like', $like)
+            $tokens = array_values(array_filter(preg_split('/\s+/', $search) ?: []));
+
+            $query->where(function ($q) use ($like, $tokens) {
+                $q->whereRaw('CAST(NIF AS TEXT) LIKE ?', [$like])
                     ->orWhere('FirstName', 'like', $like)
                     ->orWhere('LastName', 'like', $like)
+                    ->orWhereRaw("LOWER(COALESCE(FirstName, '') || ' ' || COALESCE(LastName, '')) LIKE LOWER(?)", [$like])
                     ->orWhere('PhoneNumber', 'like', $like)
                     ->orWhere('Location', 'like', $like);
+
+                foreach ($tokens as $token) {
+                    $tokenLike = '%' . $token . '%';
+                    $q->orWhereRaw('CAST(NIF AS TEXT) LIKE ?', [$tokenLike])
+                        ->orWhere('FirstName', 'like', $tokenLike)
+                        ->orWhere('LastName', 'like', $tokenLike)
+                        ->orWhereRaw("LOWER(COALESCE(FirstName, '') || ' ' || COALESCE(LastName, '')) LIKE LOWER(?)", [$tokenLike])
+                        ->orWhere('PhoneNumber', 'like', $tokenLike)
+                        ->orWhere('Location', 'like', $tokenLike);
+                }
             });
         }
 
         $pharmacies = $query->get()->map(fn ($row) => (array) $row)->toArray();
+
+        $rawSuggestions = [];
+        $allPharmacies = DB::table('pharmacy')
+            ->select(['NIF', 'FirstName', 'LastName', 'PhoneNumber', 'Location'])
+            ->orderBy('NIF', 'asc')
+            ->get();
+
+        foreach ($allPharmacies as $row) {
+            $rawSuggestions[] = (string) ($row->NIF ?? '');
+            $rawSuggestions[] = trim(((string) ($row->FirstName ?? '')) . ' ' . ((string) ($row->LastName ?? '')));
+            $rawSuggestions[] = (string) ($row->FirstName ?? '');
+            $rawSuggestions[] = (string) ($row->LastName ?? '');
+            $rawSuggestions[] = (string) ($row->PhoneNumber ?? '');
+            $rawSuggestions[] = (string) ($row->Location ?? '');
+        }
+
+        $searchSuggestions = array_values(array_unique(array_filter(array_map(
+            static fn ($value) => trim((string) $value),
+            $rawSuggestions
+        ))));
 
         $orderData = [];
         foreach ($pharmacies as $pharmacy) {
@@ -531,7 +564,33 @@ class PortalService
                 ->map(fn ($row) => (array) $row)
                 ->toArray();
 
-            $orderData[(int) $nif] = [
+            $orderIds = array_values(array_filter(array_map(
+                static fn (array $order) => (string) ($order['order_id'] ?? $order['Tracking'] ?? ''),
+                $rows
+            )));
+
+            $itemsByOrder = [];
+            if (!empty($orderIds)) {
+                foreach (DB::table('orderitem')
+                    ->whereIn('order_id', $orderIds)
+                    ->orderBy('Name')
+                    ->get() as $itemRow) {
+                    $item = (array) $itemRow;
+                    $itemsByOrder[(string) ($item['order_id'] ?? '')][] = [
+                        'Name' => (string) ($item['Name'] ?? ''),
+                        'contiti' => (int) ($item['contiti'] ?? 0),
+                    ];
+                }
+            }
+
+            $rows = array_map(static function (array $order) use ($itemsByOrder) {
+                $orderId = (string) ($order['order_id'] ?? $order['Tracking'] ?? '');
+                $order['items'] = $itemsByOrder[$orderId] ?? [];
+
+                return $order;
+            }, $rows);
+
+            $orderData[$nif] = [
                 'total' => count($rows),
                 'orders' => $rows,
                 'delivered' => count(array_filter($rows, fn ($r) => (int) ($r['Status'] ?? -1) === 1)),
@@ -544,6 +603,7 @@ class PortalService
             'pharmacies' => $pharmacies,
             'order_data' => $orderData,
             'query' => $search,
+            'search_suggestions' => $searchSuggestions,
         ];
     }
 

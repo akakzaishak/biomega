@@ -10,6 +10,35 @@ class AdminOrderCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_can_search_orders()
+    {
+        Order::create([
+            'Tracking' => 'ORD-SEARCH-1',
+            'QRCode' => 'QR-1',
+            'Date' => now()->toDateString(),
+            'otalAmount' => 100,
+            'PackageNumber' => 1,
+            'Status' => 0,
+            'IsUrgen' => 0,
+        ]);
+
+        Order::create([
+            'Tracking' => 'ORD-SEARCH-2',
+            'QRCode' => 'QR-2',
+            'Date' => now()->toDateString(),
+            'otalAmount' => 200,
+            'PackageNumber' => 2,
+            'Status' => 1,
+            'IsUrgen' => 1,
+        ]);
+
+        $response = $this->withSession(['table' => 'admin'])->get(route('admin.orders', ['q' => 'SEARCH-2']));
+
+        $response->assertOk();
+        $this->assertSame(1, substr_count($response->getContent(), 'order-row '));
+        $response->assertSee('ORD-SEARCH-2');
+    }
+
     public function test_admin_can_create_order()
     {
         $response = $this->withSession(['table' => 'admin'])->post(route('admin.orders'), [

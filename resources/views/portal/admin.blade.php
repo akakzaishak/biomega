@@ -30,6 +30,9 @@
                 <input class="bg-surface-container-low border-none rounded-full px-4 py-2 text-sm w-64 focus:ring-2 focus:ring-primary/20" placeholder="Search tracking ID..." type="text" />
                 <span class="material-symbols-outlined absolute right-3 top-2 text-on-surface-variant text-lg">search</span>
             </div>
+            <button class="p-2 hover:bg-slate-50 transition-colors rounded-full active:scale-95 flex items-center gap-1 text-sm font-semibold text-slate-600" title="Notifications" type="button">
+                <span class="material-symbols-outlined text-slate-600">notifications</span>
+            </button>
             <a href="{{ route('logout') }}" class="p-2 hover:bg-slate-50 transition-colors rounded-full active:scale-95 flex items-center gap-1 text-sm font-semibold text-slate-600" title="Logout">
                 <span class="material-symbols-outlined text-slate-600">logout</span>
             </a>
@@ -52,9 +55,14 @@
                 <a class="{{ $page === 'settings' ? 'bg-blue-50 text-blue-700 rounded-lg font-bold' : 'text-slate-600 hover:bg-slate-100' }} flex items-center gap-3 px-3 py-2.5 rounded-lg transition-transform hover:translate-x-1" href="{{ route('admin.settings') }}"><span class="material-symbols-outlined">settings</span><span class="text-sm">Settings</span></a>
                 <a class="text-red-500 hover:bg-red-50 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-transform hover:translate-x-1 mt-2" href="{{ route('logout') }}"><span class="material-symbols-outlined">logout</span><span class="text-sm font-bold">Logout</span></a>
             </nav>
+            <div class="mt-auto pt-4 border-t border-slate-200">
+                <a href="{{ route('admin.orders') }}?action=new_emergency" class="w-full bg-gradient-to-r from-primary to-primary-container text-white py-3 px-4 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined text-lg">add_circle</span>New Emergency Order
+                </a>
+            </div>
         </aside>
 
-        <main class="flex-1 lg:ml-64 p-4 lg:p-8 space-y-8 bg-surface">
+        <main class="flex-1 min-w-0 p-4 lg:p-8 lg:ml-64 space-y-8 bg-surface">
             @if (session('success'))
                 <div class="rounded-2xl border border-green-200 bg-green-50 text-green-800 px-4 py-3 text-sm font-medium">{{ session('success') }}</div>
             @endif

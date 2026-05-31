@@ -264,12 +264,38 @@ class PortalController extends Controller
             return back()->with('error', 'Order not found.');
         }
 
+        $query = trim((string) $request->query('q', ''));
         $orders = $this->portal->adminOrderDashboardOrders();
+
+        if ($query !== '') {
+            $needle = mb_strtolower($query);
+            $orders = array_values(array_filter($orders, static function (array $order) use ($needle) {
+                $haystacks = [
+                    (string) ($order['Tracking'] ?? ''),
+                    (string) ($order['Date'] ?? ''),
+                    (string) ($order['ph_first'] ?? ''),
+                    (string) ($order['ph_last'] ?? ''),
+                    (string) ($order['ph_loc'] ?? ''),
+                    (string) ($order['dp_first'] ?? ''),
+                    (string) ($order['dp_last'] ?? ''),
+                    (string) ($order['assigned_pharmacy'] ?? ''),
+                ];
+
+                foreach ($haystacks as $haystack) {
+                    if ($haystack !== '' && str_contains(mb_strtolower($haystack), $needle)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }));
+        }
 
         return view('portal.admin', array_merge(['userName' => $this->userName('Admin')], $this->portal->adminCommon(), [
             'page' => 'orders',
             'orders' => $orders,
             'deliveryPersons' => $this->portal->deliveryDrivers(),
+            'query' => $query,
         ]));
     }
 
@@ -571,6 +597,19 @@ class PortalController extends Controller
         $firstname = (string) session('firstname', 'Delivery');
         $lastname = (string) session('lastname', 'Person');
         $phone = (string) session('phone', '');
+        $gpsForced = false;
+        $forcedByAdmin = null;
+
+        if ($phone !== '' && Schema::hasTable('delivery_location')) {
+            $location = DB::table('delivery_location')
+                ->where('PhoneNumber', $phone)
+                ->first(['GpsForced', 'ForcedByAdmin']);
+
+            if ($location) {
+                $gpsForced = (int) ($location->GpsForced ?? 0) === 1;
+                $forcedByAdmin = $gpsForced ? (string) ($location->ForcedByAdmin ?? '') : null;
+            }
+        }
 
         if ($request->isMethod('post') && $request->filled('action')) {
             $tracking = trim((string) $request->input('tracking', ''));
@@ -664,6 +703,8 @@ class PortalController extends Controller
             'firstname' => $firstname,
             'lastname' => $lastname,
             'phone' => $phone,
+            'gpsForced' => $gpsForced,
+            'forcedByAdmin' => $forcedByAdmin,
             'flash' => $flash,
             'flashType' => $flashType,
             'orders' => $orders,

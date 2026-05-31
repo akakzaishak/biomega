@@ -2,6 +2,7 @@
     $total_pharmacies = count($pharmacies ?? []);
     $order_data = $order_data ?? [];
     $search = $query ?? '';
+  $searchSuggestions = $search_suggestions ?? [];
 @endphp
 
 <style>
@@ -57,7 +58,8 @@
     <form method="GET" action="{{ route('admin.pharmacies') }}" class="flex gap-2 flex-wrap">
       <div class="relative flex-1 min-w-[220px] max-w-md">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
-        <input type="text" name="q" value="{{ $search }}" placeholder="NIF, nom, téléphone, wilaya..." class="w-full pl-10 pr-4 py-2.5 bg-surface-container-lowest border border-outline-variant/30 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none" />
+        <input id="pharmacy-search-input" type="text" name="q" list="pharmacy-search-suggestions" autocomplete="off" value="{{ $search }}" placeholder="NIF, nom, téléphone, wilaya..." class="w-full pl-10 pr-4 py-2.5 bg-surface-container-lowest border border-outline-variant/30 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none" />
+        <datalist id="pharmacy-search-suggestions"></datalist>
       </div>
       <button class="bg-primary text-white px-5 py-2.5 rounded-xl font-semibold text-sm">Chercher</button>
       @if($search !== '')
@@ -139,8 +141,9 @@
           <tbody class="divide-y divide-outline-variant/10">
             @foreach($pharmacies as $i => $p)
               @php
-                $nif = (int) ($p['NIF'] ?? 0);
+                $nif = (string) ($p['NIF'] ?? '');
                 $data = $order_data[$nif] ?? ['total'=>0,'orders'=>[],'delivered'=>0,'pending'=>0,'urgent'=>0];
+                $pharmacyName = trim(($p['FirstName'] ?? '') . ' ' . ($p['LastName'] ?? ''));
               @endphp
               <tr class="pharm-row transition-colors" style="animation:fadeIn .3s ease {{ $i * 0.04 }}s both;">
                 <td class="px-5 py-4">
@@ -180,7 +183,7 @@
                 </td>
                 <td class="px-5 py-4 text-center">
                   <div class="flex items-center justify-center gap-1">
-                    <button onclick='confirmDelete({{ $nif }}, @js(($p['FirstName'] ?? '')." ".($p['LastName'] ?? '')), {{ $data['total'] ?? 0 }})' class="p-2 rounded-lg hover:bg-error-container text-error transition-colors" title="Supprimer"><span class="material-symbols-outlined text-lg">delete</span></button>
+                    <button type="button" onclick="confirmDelete(@js($nif), @js($pharmacyName), @js($data['total'] ?? 0))" class="p-2 rounded-lg hover:bg-error-container text-error transition-colors" title="Supprimer"><span class="material-symbols-outlined text-lg">delete</span></button>
                   </div>
                 </td>
               </tr>
@@ -215,6 +218,7 @@
     <form method="POST" id="deleteForm" action="{{ route('admin.pharmacies') }}">
       @csrf
       <input type="hidden" name="delete_nif" id="deleteNifInput" value="" />
+      <input type="hidden" name="force_delete" value="1" />
       <input type="hidden" name="q" value="{{ $search }}" />
       <div class="flex gap-3">
         <button type="button" onclick="closeDeleteModal()" class="flex-1 px-5 py-3 border border-outline-variant/40 rounded-xl font-semibold text-sm text-on-surface hover:bg-surface-container transition-colors">Annuler</button>
@@ -241,6 +245,30 @@
 
 @push('scripts')
 <script>
+const pharmacySearchValues = @json($searchSuggestions);
+
+function updatePharmacySuggestions() {
+  const input = document.getElementById('pharmacy-search-input');
+  const datalist = document.getElementById('pharmacy-search-suggestions');
+  if (!input || !datalist) return;
+
+  const q = (input.value || '').trim().toLowerCase();
+  const matched = pharmacySearchValues
+    .filter(v => (v || '').toLowerCase().includes(q))
+    .slice(0, 12);
+
+  datalist.innerHTML = matched
+    .map(v => `<option value="${String(v).replace(/"/g, '&quot;')}"></option>`)
+    .join('');
+}
+
+const pharmacySearchInput = document.getElementById('pharmacy-search-input');
+if (pharmacySearchInput) {
+  pharmacySearchInput.addEventListener('input', updatePharmacySuggestions);
+  pharmacySearchInput.addEventListener('focus', updatePharmacySuggestions);
+  updatePharmacySuggestions();
+}
+
 function confirmDelete(nif, name, orderCount) {
   document.getElementById('deleteNifInput').value = nif;
   document.getElementById('modalPharmName').textContent = name + '  (NIF #' + nif + ')';
@@ -253,11 +281,35 @@ function confirmDelete(nif, name, orderCount) {
     warn.classList.add('hidden');
     warn.classList.remove('flex');
   }
-  document.getElementById('deleteModal').classList.remove('hidden');
+  const modal = document.getElementById('deleteModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
 }
-function closeDeleteModal() { document.getElementById('deleteModal').classList.add('hidden'); }
+function closeDeleteModal() {
+  const modal = document.getElementById('deleteModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function normalizeOrdersPayload(rawOrders) {
+  if (Array.isArray(rawOrders)) {
+    return rawOrders;
+  }
+
+  if (typeof rawOrders === 'string' && rawOrders.trim() !== '') {
+    try {
+      const parsed = JSON.parse(rawOrders);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  return [];
+}
 
 function openOrders(nif, orders) {
+  orders = normalizeOrdersPayload(orders);
   document.getElementById('ordersNifLabel').textContent = '#' + nif;
   document.getElementById('ordersTotalLabel').textContent = orders.length + ' commande(s) liée(s)';
   const container = document.getElementById('ordersListContainer');
@@ -268,27 +320,52 @@ function openOrders(nif, orders) {
       if (s === null || s === undefined) return '<span class="status-pill bg-surface-container text-on-surface-variant">Inconnu</span>';
       return parseInt(s) === 1 ? '<span class="status-pill bg-green-100 text-green-700">✓ Livré</span>' : '<span class="status-pill bg-secondary-container text-on-secondary-container">⏳ En attente</span>';
     };
-    container.innerHTML = orders.map(o => `\
-      <div class="flex items-center justify-between py-3 border-b border-outline-variant/10 last:border-0">\
-        <div class="flex items-center gap-3">\
-          <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${parseInt(o.IsUrgen)===1 ? 'bg-error-container' : 'bg-primary/10'}">\
-            <span class="material-symbols-outlined text-base ${parseInt(o.IsUrgen)===1 ? 'text-error' : 'text-primary'}">${parseInt(o.IsUrgen)===1 ? 'priority_high' : 'package_2'}</span>\
-          </div>\
-          <div>\
-            <p class="text-sm font-bold text-on-surface">${o.Tracking || o.order_id}</p>\
-            <p class="text-xs text-on-surface-variant">${o.Date || '—'} · Livreur: ${o.deliveryperson_id || '—'}</p>\
-          </div>\
-        </div>\
-        <div class="text-right flex flex-col items-end gap-1">\
-          ${statusLabel(o.Status)}\
-          ${parseInt(o.IsUrgen)===1 ? '<span class="status-pill bg-error-container text-error">🚨 Urgent</span>' : ''}\
-        </div>\
-      </div>\
-    `).join('');
+    container.innerHTML = orders.map(o => {
+      const items = Array.isArray(o.items) ? o.items : [];
+      const itemDetails = items.length
+        ? `<div class="mt-3 rounded-xl bg-surface-container-low border border-outline-variant/15 p-4">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">Détails de la commande</p>
+            <div class="space-y-2">
+              ${items.map(item => `
+                <div class="flex items-center justify-between gap-3 text-sm">
+                  <span class="font-semibold text-on-surface">${item.Name || '—'}</span>
+                  <span class="inline-flex items-center justify-center min-w-10 px-2 py-1 rounded-lg bg-primary/10 text-primary text-xs font-bold">x${Number(item.contiti || 0)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>`
+        : '';
+
+      return `
+      <div class="flex items-center justify-between py-3 border-b border-outline-variant/10 last:border-0">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${parseInt(o.IsUrgen)===1 ? 'bg-error-container' : 'bg-primary/10'}">
+              <span class="material-symbols-outlined text-base ${parseInt(o.IsUrgen)===1 ? 'text-error' : 'text-primary'}">${parseInt(o.IsUrgen)===1 ? 'priority_high' : 'package_2'}</span>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-on-surface">${o.Tracking || o.order_id}</p>
+              <p class="text-xs text-on-surface-variant">${o.Date || '—'} · Livreur: ${o.deliveryperson_id || '—'}</p>
+            </div>
+          </div>
+          <div class="text-right flex flex-col items-end gap-1">
+            ${statusLabel(o.Status)}
+            ${parseInt(o.IsUrgen)===1 ? '<span class="status-pill bg-error-container text-error">🚨 Urgent</span>' : ''}
+          </div>
+        </div>
+        ${itemDetails}
+      </div>`;
+    }).join('');
   }
-  document.getElementById('ordersModal').classList.remove('hidden');
+  const modal = document.getElementById('ordersModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
 }
-function closeOrdersModal() { document.getElementById('ordersModal').classList.add('hidden'); }
+function closeOrdersModal() {
+  const modal = document.getElementById('ordersModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
 
 // hide modals on backdrop click
 document.getElementById('deleteModal').addEventListener('click', function(e){ if(e.target===this) closeDeleteModal(); });
