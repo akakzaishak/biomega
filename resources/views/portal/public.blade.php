@@ -339,16 +339,6 @@
             @include('portal.public.login')
         </div>
     @elseif ($page === 'register')
-        <header class="bg-white/90 backdrop-blur-lg shadow-sm sticky top-0 z-50">
-            <div class="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
-                <div>
-                    <span class="text-xl font-extrabold tracking-tighter text-blue-800 headline">Bio Mega Pharme</span>
-                    <p class="text-xs text-slate-500">Register your pharmacy</p>
-                </div>
-                <a href="{{ route('home') }}" class="text-sm font-semibold text-primary">Home</a>
-            </div>
-        </header>
-
         <main class="py-12 px-4 relative overflow-hidden">
             <div class="absolute inset-0 pointer-events-none">
                 <div class="absolute -top-24 right-10 h-72 w-72 rounded-full bg-blue-100/60 blur-3xl"></div>

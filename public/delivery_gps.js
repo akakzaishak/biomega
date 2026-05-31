@@ -223,9 +223,6 @@
 
     // ── Poll server for force request every 5s ────────────────────────────────
     function pollForceRequest() {
-        // Never re-show the modal if GPS was already activated in this session
-        if (gpsActivatedThisSession) return;
-
         // include phone so the server can identify the delivery person
         const checkUrl = CHECK_ENDPOINT + '?phone=' + encodeURIComponent(typeof DP_PHONE !== 'undefined' ? DP_PHONE : '');
         fetch(checkUrl)
@@ -285,19 +282,28 @@
     }
 
     // ── Boot ──────────────────────────────────────────────────────────────────
-    window.addEventListener('beforeunload', goOffline);
-    setInterval(pollForceRequest, POLL_INTERVAL_MS);
-    try {
-        gpsActivatedThisSession = sessionStorage.getItem(gpsSessionKey) === '1';
-    } catch (e) { }
+    function boot() {
+        window.addEventListener('beforeunload', goOffline);
+        setInterval(pollForceRequest, POLL_INTERVAL_MS);
+        try {
+            gpsActivatedThisSession = sessionStorage.getItem(gpsSessionKey) === '1';
+        } catch (e) { }
 
-    if (window.DP_REQUIRE_GPS_ON_LOAD && !gpsActivatedThisSession) {
-        document.body.classList.add('gps-locked');
-        showModal();
-    } else {
-        document.body.classList.remove('gps-locked');
-        pollForceRequest(); // check immediately on page load
+        if (window.DP_REQUIRE_GPS_ON_LOAD) {
+            document.body.classList.add('gps-locked');
+            try { sessionStorage.removeItem(gpsSessionKey); } catch (e) { }
+            showModal(typeof window.DP_FORCED_BY_ADMIN !== 'undefined' ? window.DP_FORCED_BY_ADMIN : null);
+        } else {
+            document.body.classList.remove('gps-locked');
+            pollForceRequest(); // check immediately on page load
+        }
+        startWatching();    // also start normal GPS sending
     }
-    startWatching();    // also start normal GPS sending
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
+    }
 
 })();
