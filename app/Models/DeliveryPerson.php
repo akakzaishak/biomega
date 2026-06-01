@@ -16,3 +16,4 @@ class DeliveryPerson extends Model
         return $this->hasMany(AsinedOrder::class, 'deliveryperson_id', 'PhoneNumber');
     }
 }
+ 

@@ -372,3 +372,4 @@ document.getElementById('deleteModal').addEventListener('click', function(e){ if
 document.getElementById('ordersModal').addEventListener('click', function(e){ if(e.target===this) closeOrdersModal(); });
 </script>
 @endpush
+ 

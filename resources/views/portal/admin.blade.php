@@ -12,9 +12,6 @@
         @include('layouts.portal-assets')
 </head>
 <body class="bg-surface text-on-surface font-body">
-    @if ($page === 'tracking')
-        @include('portal.admin.tracking')
-    @else
     <header class="bg-white/80 backdrop-blur-lg shadow-sm shadow-blue-500/5 sticky top-0 z-50 flex justify-between items-center px-6 py-3 w-full">
         <div class="flex items-center gap-8">
             <span class="text-xl font-extrabold tracking-tighter text-blue-800 headline">TronSport Medicamon</span>
@@ -92,6 +89,6 @@
         </main>
     </div>
     @stack('scripts')
-    @endif
 </body>
 </html>
+ 

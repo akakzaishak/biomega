@@ -7,6 +7,7 @@ use App\Models\DeliveryPerson;
 use App\Models\Order;
 use App\Models\Pharmacy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -93,4 +94,53 @@ class DeliveryManagerDashboardTest extends TestCase
             'otalAmount' => 250,
         ]);
     }
+
+    public function test_delivery_manager_tracking_page_and_force_gps(): void
+    {
+        $manager = DeliveryManager::create([
+            'FirstName' => 'Manager',
+            'LastName' => 'User',
+            'PhoneNumber' => '0777000001',
+            'Password' => Hash::make('pass1234'),
+            'Role' => 'deliverymanager',
+        ]);
+
+        $driver = DeliveryPerson::create([
+            'FirstName' => 'Driver',
+            'LastName' => 'Two',
+            'PhoneNumber' => '0799000001',
+            'Password' => Hash::make('pass1234'),
+            'Role' => 'deliveryperson',
+        ]);
+
+        $response = $this->withSession([
+            'table' => 'deliverymanager',
+            'user_id' => $manager->ID,
+            'phone' => $manager->PhoneNumber,
+            'firstname' => $manager->FirstName,
+            'lastname' => $manager->LastName,
+        ])->get(route('delivery-manager.tracking'));
+
+        $response->assertOk();
+        $response->assertSee('Live Tracking');
+        $response->assertSee($driver->FirstName);
+
+        $response = $this->withSession([
+            'table' => 'deliverymanager',
+            'user_id' => $manager->ID,
+            'phone' => $manager->PhoneNumber,
+            'firstname' => $manager->FirstName,
+            'lastname' => $manager->LastName,
+        ])->post(route('delivery-manager.tracking'), [
+            'force_gps_phone' => $driver->PhoneNumber,
+        ]);
+
+        $response->assertRedirect(route('delivery-manager.tracking', ['forced' => $driver->PhoneNumber]));
+
+        $this->assertDatabaseHas('delivery_location', [
+            'PhoneNumber' => $driver->PhoneNumber,
+            'GpsForced' => 1,
+        ]);
+    }
 }
+ 

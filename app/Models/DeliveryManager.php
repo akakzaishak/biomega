@@ -11,3 +11,4 @@ class DeliveryManager extends Model
     public $timestamps = false;
     protected $fillable = ['FirstName','LastName','PhoneNumber','Password','Role'];
 }
+ 

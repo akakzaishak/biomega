@@ -205,11 +205,11 @@ class PortalService
                 'o.*',
                 'a.deliveryperson_id',
                 DB::raw('a.pharmacy_id AS assigned_pharmacy'),
-                DB::raw('d.FirstName AS dp_first'),
-                DB::raw('d.LastName AS dp_last'),
-                DB::raw('p.FirstName AS ph_first'),
-                DB::raw('p.LastName AS ph_last'),
-                DB::raw('p.Location AS ph_loc'),
+                DB::raw('"d"."FirstName" AS "dp_first"'),
+                DB::raw('"d"."LastName" AS "dp_last"'),
+                DB::raw('"p"."FirstName" AS "ph_first"'),
+                DB::raw('"p"."LastName" AS "ph_last"'),
+                DB::raw('"p"."Location" AS "ph_loc"'),
             ])
             ->get()
             ->map(fn ($row) => (array) $row)
@@ -376,8 +376,9 @@ class PortalService
                 'o.otalAmount',
                 'o.IsUrgen',
                 'o.Status',
-                DB::raw('p.FirstName AS ph_first'),
-                DB::raw('p.LastName AS ph_last'),
+                'o.ProofImage AS proof',
+                DB::raw('"p"."FirstName" AS "ph_first"'),
+                DB::raw('"p"."LastName" AS "ph_last"'),
                 'p.Location',
             ])
             ->get()
@@ -424,11 +425,11 @@ class PortalService
                     'l.Latitude',
                     'l.Longitude',
                     'l.UpdatedAt',
-                    DB::raw('l.Status AS OnlineStatus'),
+                    DB::raw('"l"."Status" AS "OnlineStatus"'),
                     'l.GpsForced',
                     'l.ForcedAt',
                     'l.ForcedByAdmin',
-                    DB::raw('COUNT(DISTINCT ao.ID) AS ActiveOrders'),
+                    DB::raw('COUNT(DISTINCT "ao"."ID") AS "ActiveOrders"'),
                 ])
                 ->get()
                 ->map(fn ($row) => (array) $row)
@@ -474,6 +475,101 @@ class PortalService
             'deliveryPersons' => $deliveryPersons,
             'routeHistory' => $routeHistory,
             'assignedOrders' => $assignedOrders,
+            'stats' => $stats,
+            'dpColors' => $colors,
+        ];
+    }
+
+    /**
+     * Return tracking data scoped to a single pharmacy: only delivery persons
+     * who currently have active orders assigned to the given pharmacy.
+     * Useful for the pharmacy-facing live map which must not show all drivers.
+     *
+     * @param string $pharmacyId
+     * @return array
+     */
+    public function trackingDashboardDataForPharmacy(string $pharmacyId): array
+    {
+        $base = $this->trackingDashboardData();
+
+        $pharmacyId = trim((string) $pharmacyId);
+        if ($pharmacyId === '') return $base;
+
+        // Find phone numbers of drivers who have active orders for this pharmacy
+        if (!Schema::hasTable('asined_order') || !Schema::hasTable('order')) {
+            return ['deliveryPersons' => [], 'routeHistory' => [], 'assignedOrders' => [], 'stats' => ['totalDP' => 0, 'onlineDP' => 0, 'offlineDP' => 0, 'forcedCount' => 0], 'dpColors' => []];
+        }
+
+        $phones = DB::table('asined_order as ao')
+            ->join('order as o', 'ao.order_id', '=', 'o.Tracking')
+            ->where('ao.pharmacy_id', $pharmacyId)
+            ->where('o.Status', 0)
+            ->whereNotNull('ao.deliveryperson_id')
+            ->pluck('ao.deliveryperson_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->toArray();
+
+        if (empty($phones)) {
+            return ['deliveryPersons' => [], 'routeHistory' => [], 'assignedOrders' => [], 'stats' => ['totalDP' => 0, 'onlineDP' => 0, 'offlineDP' => 0, 'forcedCount' => 0], 'dpColors' => []];
+        }
+
+        // Filter delivery persons and route history to only those phones
+        $deliveryPersons = array_values(array_filter($base['deliveryPersons'] ?? [], fn($d) => in_array((string) ($d['PhoneNumber'] ?? ''), $phones, true)));
+
+        $routeHistory = [];
+        foreach (($base['routeHistory'] ?? []) as $phone => $history) {
+            if (in_array((string) $phone, $phones, true)) $routeHistory[$phone] = $history;
+        }
+
+        // Build assignedOrders only for this pharmacy
+        $orders = DB::table('asined_order as ao')
+            ->join('order as o', 'ao.order_id', '=', 'o.Tracking')
+            ->leftJoin('pharmacy as p', 'ao.pharmacy_id', '=', 'p.NIF')
+            ->where('o.Status', 0)
+            ->where('ao.pharmacy_id', $pharmacyId)
+            ->orderByDesc('o.IsUrgen')
+            ->orderBy('ao.deliveryperson_id')
+            ->select([
+                'ao.deliveryperson_id',
+                'ao.order_id',
+                'o.otalAmount',
+                'o.IsUrgen',
+                'o.Status',
+                'o.ProofImage AS proof',
+                DB::raw('"p"."FirstName" AS "ph_first"'),
+                DB::raw('"p"."LastName" AS "ph_last"'),
+                'p.Location',
+            ])
+            ->get()
+            ->map(fn($r) => (array) $r)
+            ->toArray();
+
+        $assigned = [];
+        foreach ($orders as $ord) {
+            $assigned[$ord['deliveryperson_id']][] = $ord;
+        }
+
+        // Recompute stats for the filtered set
+        $stats = [
+            'totalDP' => count($deliveryPersons),
+            'onlineDP' => count(array_filter($deliveryPersons, fn ($driver) => !empty($driver['Latitude']) && !empty($driver['UpdatedAt']) && strtotime($driver['UpdatedAt']) > time() - 600)),
+        ];
+        $stats['offlineDP'] = $stats['totalDP'] - $stats['onlineDP'];
+        $stats['forcedCount'] = count(array_filter($deliveryPersons, fn ($driver) => !empty($driver['GpsForced'])));
+
+        // Keep the same color mapping for the filtered drivers
+        $colors = [];
+        $palette = ['#0060a8', '#186a22', '#b45309', '#7c3aed', '#be123c', '#0891b2', '#d97706', '#059669'];
+        foreach ($deliveryPersons as $index => $driver) {
+            $colors[$driver['PhoneNumber']] = $palette[$index % count($palette)];
+        }
+
+        return [
+            'deliveryPersons' => $deliveryPersons,
+            'routeHistory' => $routeHistory,
+            'assignedOrders' => $assigned,
             'stats' => $stats,
             'dpColors' => $colors,
         ];
@@ -705,14 +801,17 @@ class PortalService
             return [];
         }
 
+        // Return id, name and contiti to match legacy view expectations
         return OrderItem::query()
-            ->select('Name')
-            ->distinct()
+            ->select(['ID', 'Name', 'contiti'])
             ->orderBy('Name')
-            ->limit(25)
-            ->pluck('Name')
-            ->filter()
-            ->values()
+            ->limit(250)
+            ->get()
+            ->map(fn($r) => [
+                'id' => $r->ID ?? null,
+                'name' => $r->Name ?? null,
+                'contiti' => (int) ($r->contiti ?? 0),
+            ])
             ->toArray();
     }
 
@@ -796,7 +895,7 @@ class PortalService
 
     public function deliveryPersonDashboard(string $identity): array
     {
-        $routes = AsinedOrder::with(['order','pharmacy'])->orderByDesc('id')->get()->map(fn($a) => [
+        $routes = AsinedOrder::with(['order','pharmacy'])->orderByDesc('ID')->get()->map(fn($a) => [
             'order_id' => $a->order_id,
             'deliveryperson_id' => $a->deliveryperson_id,
             'Tracking' => $a->order?->Tracking ?? null,
@@ -828,7 +927,7 @@ class PortalService
         if ($nif !== '') {
             $orders = AsinedOrder::with('order')
                 ->where('pharmacy_id', $nif)
-                ->orderByDesc('id')
+                ->orderByDesc('ID')
                 ->get()
                 ->map(fn($a) => [
                     'order_id' => $a->order_id,
@@ -878,6 +977,10 @@ class PortalService
                 ->get(['NIF', 'FirstName', 'LastName', 'Location', 'PhoneNumber'])
                 ->map(fn ($pharmacy) => (array) $pharmacy)
                 ->toArray(),
+            'dbItems' => OrderItem::orderBy('Name', 'asc')
+                ->get(['ID', 'Name', 'contiti'])
+                ->map(fn ($item) => (array) $item)
+                ->toArray(),
         ];
     }
 
@@ -887,53 +990,69 @@ class PortalService
         DB::beginTransaction();
 
         try {
+
             $amount = (int) ($data['amount'] ?? $data['total_amount'] ?? 0);
-            $items = [];
 
-            if (!empty($data['medicine_name'])) {
-                $items[] = [
-                    'name' => (string) $data['medicine_name'],
-                    'quantity' => (int) ($data['quantity'] ?? 1),
-                ];
-            }
-
-            if (!empty($data['item_name']) && is_array($data['item_name'])) {
-                $quantities = $data['item_qty'] ?? [];
-                foreach ($data['item_name'] as $index => $name) {
-                    $name = trim((string) $name);
-                    if ($name === '') {
-                        continue;
-                    }
-
-                    $items[] = [
-                        'name' => $name,
-                        'quantity' => max(1, (int) ($quantities[$index] ?? 1)),
-                    ];
-                }
-            }
-
-            if ($items === []) {
-                throw new RuntimeException('At least one item is required.');
-            }
-
+            // Create the order record
             Order::create([
                 'QRCode' => 'QR-' . $tracking,
                 'Tracking' => $tracking,
                 'Date' => now()->toDateString(),
                 'otalAmount' => $amount,
                 'ProofImage' => '',
-                'PackageNumber' => $data['package_number'],
+                'PackageNumber' => $data['package_number'] ?? 1,
                 'Status' => 0,
                 'QRimage' => '',
                 'IsUrgen' => !empty($data['is_urgent']) ? 1 : 0,
             ]);
 
-            foreach ($items as $item) {
-                OrderItem::create([
-                    'order_id' => $tracking,
-                    'Name' => $item['name'],
-                    'contiti' => $item['quantity'],
-                ]);
+            // If incoming payload uses legacy items[][] format (orderitem_id & contiti), persist to order_item_link
+            if (!empty($data['items']) && is_array($data['items'])) {
+                foreach ($data['items'] as $it) {
+                    $orderitemId = (int) ($it['orderitem_id'] ?? 0);
+                    $qty = (int) ($it['contiti'] ?? 0);
+                    if ($orderitemId <= 0 || $qty <= 0) continue;
+
+                    DB::table('order_item_link')->insert([
+                        'orderitem_id' => $orderitemId,
+                        'pharmacy_id' => $data['pharmacy_id'] ?? null,
+                        'contiti' => $qty,
+                    ]);
+                }
+            } else {
+                // Fallback to current behavior: accept item_name/item_qty or medicine_name/quantity
+                $items = [];
+
+                if (!empty($data['medicine_name'])) {
+                    $items[] = [
+                        'name' => (string) $data['medicine_name'],
+                        'quantity' => (int) ($data['quantity'] ?? 1),
+                    ];
+                }
+
+                if (!empty($data['item_name']) && is_array($data['item_name'])) {
+                    $quantities = $data['item_qty'] ?? [];
+                    foreach ($data['item_name'] as $index => $name) {
+                        $name = trim((string) $name);
+                        if ($name === '') continue;
+                        $items[] = [
+                            'name' => $name,
+                            'quantity' => max(1, (int) ($quantities[$index] ?? 1)),
+                        ];
+                    }
+                }
+
+                if ($items === []) {
+                    throw new RuntimeException('At least one item is required.');
+                }
+
+                foreach ($items as $item) {
+                    OrderItem::create([
+                        'order_id' => $tracking,
+                        'Name' => $item['name'],
+                        'contiti' => $item['quantity'],
+                    ]);
+                }
             }
 
             if (!empty($data['pharmacy_id'])) {
@@ -1083,4 +1202,4 @@ class PortalService
             throw $exception;
         }
     }
-}
+} 

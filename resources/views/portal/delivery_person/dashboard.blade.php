@@ -283,7 +283,7 @@
                   <span class="material-symbols-outlined text-lg" style="font-variation-settings:'FILL' 1;">local_shipping</span>
                   Chargé en transit
                 </button>
-                <button type="button" onclick="event.stopPropagation(); openCameraModal(@json($track), 'livre')" class="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl font-bold text-sm hover:opacity-90 active:scale-95 transition-all shadow-sm {{ $urg ? 'ring-2 ring-error/50' : '' }}">
+                <button type="button" onclick="openCameraModal(@json($track), 'livre', event)" class="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl font-bold text-sm hover:opacity-90 active:scale-95 transition-all shadow-sm {{ $urg ? 'ring-2 ring-error/50' : '' }}">
                   <span class="material-symbols-outlined text-lg" style="font-variation-settings:'FILL' 1;">check_circle</span>
                   Livré
                 </button>
@@ -340,6 +340,7 @@
           Prenez une photo du colis
         </div>
       </div>
+      <div id="cameraError" class="absolute bottom-0 left-0 right-0 px-4 pb-4 text-sm text-error bg-black/60 hidden"></div>
     </div>
     <div class="p-5 space-y-3">
       <div id="captureActions">
@@ -409,7 +410,11 @@ let capturedDataUrl = null;
 let currentTracking = null;
 let currentAction = null;
 
-async function openCameraModal(tracking, action) {
+async function openCameraModal(tracking, action, event) {
+  if (event && typeof event.stopPropagation === 'function') {
+    event.stopPropagation();
+  }
+
   currentTracking = tracking;
   currentAction = action;
   capturedDataUrl = null;
@@ -419,11 +424,21 @@ async function openCameraModal(tracking, action) {
 
   const video = document.getElementById('cameraStream');
   const canvas = document.getElementById('cameraCanvas');
+  const errorBox = document.getElementById('cameraError');
+
   video.classList.remove('hidden');
   canvas.classList.add('hidden');
   document.getElementById('captureActions').classList.remove('hidden');
   document.getElementById('confirmActions').classList.add('hidden');
   document.getElementById('cameraHint').classList.remove('hidden');
+  errorBox.classList.add('hidden');
+  errorBox.textContent = '';
+
+  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+    errorBox.textContent = 'Caméra non disponible dans ce navigateur. Vous pouvez charger une image depuis la galerie.';
+    errorBox.classList.remove('hidden');
+    return;
+  }
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
@@ -431,6 +446,8 @@ async function openCameraModal(tracking, action) {
   } catch (e) {
     video.classList.add('hidden');
     document.getElementById('cameraHint').classList.add('hidden');
+    errorBox.textContent = 'Impossible d’ouvrir la caméra. Veuillez autoriser la caméra ou utilisez l’option galerie.';
+    errorBox.classList.remove('hidden');
   }
 }
 
@@ -486,14 +503,24 @@ function loadFromFile(event) {
     document.getElementById('captureActions').classList.add('hidden');
     document.getElementById('confirmActions').classList.remove('hidden');
     document.getElementById('cameraHint').classList.add('hidden');
+    const errorBox = document.getElementById('cameraError');
+    errorBox.classList.add('hidden');
+    errorBox.textContent = '';
   };
   reader.readAsDataURL(file);
 }
 
 function submitCameraAction() {
+  if (!capturedDataUrl) {
+    const errorBox = document.getElementById('cameraError');
+    errorBox.textContent = 'Veuillez prendre ou charger une photo avant de confirmer.';
+    errorBox.classList.remove('hidden');
+    return;
+  }
+
   document.getElementById('form_tracking').value = currentTracking;
   document.getElementById('form_action').value = currentAction;
-  document.getElementById('form_proof').value = capturedDataUrl || '';
+  document.getElementById('form_proof').value = capturedDataUrl;
   closeCamera();
   document.getElementById('actionForm').submit();
 }
@@ -603,3 +630,5 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
+ 

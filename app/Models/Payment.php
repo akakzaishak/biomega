@@ -8,7 +8,7 @@ class Payment extends Model
 {
     protected $table = 'payment';
     protected $primaryKey = 'payment_id';
-    public $timestamps = true;
+    public $timestamps = false;
     protected $fillable = ['order_id','amount','method','status'];
 
     public function order()
@@ -16,3 +16,4 @@ class Payment extends Model
         return $this->belongsTo(Order::class, 'order_id', 'Tracking');
     }
 }
+ 
