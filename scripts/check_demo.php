@@ -43,3 +43,4 @@ foreach ($phones as $phone) {
     }
     echo "---\n";
 }
+ 

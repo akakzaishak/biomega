@@ -23,3 +23,4 @@ class Pharmacy extends Model
         return $this->hasMany(Payment::class, 'order_id', 'NIF');
     }
 }
+ 

@@ -5,6 +5,7 @@
 		$error = session('error', '');
 		$pending_orders = $pendingOrders ?? [];
 		$pharmacies = $pharmacies ?? [];
+		$db_items = $dbItems ?? [];
 		$total_pending = count($pending_orders);
 		$assigned_count = count(array_filter($pending_orders, fn ($o) => !empty($o['pharmacy_id']) || ($o['pharmacy_id'] ?? '') === '0'));
 		$urgent_count = count(array_filter($pending_orders, fn ($o) => (int) ($o['IsUrgen'] ?? 0) === 1));
@@ -48,6 +49,9 @@ body{font-family:'Inter',sans-serif;background:#f8f9fa;}
 .tab-btn:not(.active):hover{background:#edeeef;}
 .item-input-row input{width:100%;padding:.6rem .75rem;background:#e7e8e9;border:none;border-radius:.5rem;font-size:.875rem;outline:none;}
 .item-input-row input:focus{box-shadow:0 0 0 2px rgba(0,94,164,.2);}
+.item-db-row{transition:background .2s,border-color .2s,transform .2s;}
+.item-db-row:hover{background:rgba(0,94,164,.05);}
+.item-db-row.selected{background:rgba(0,94,164,.08);border-left:4px solid #005ea4;}
 </style>
 </head>
 <body class="text-on-surface min-h-screen">
@@ -208,7 +212,7 @@ body{font-family:'Inter',sans-serif;background:#f8f9fa;}
 				<p class="text-sm text-on-surface-variant">Remplissez tous les champs et ajoutez les articles de la commande.</p>
 			</div>
 
-			<form method="POST" action="{{ route('stock.dashboard') }}" class="px-8 py-7 space-y-8">
+			<form method="POST" action="{{ route('stock.dashboard') }}" class="px-8 py-7 space-y-8" onsubmit="return validateSelectedItems()">
 				@csrf
 				<input type="hidden" name="action" value="create_order"/>
 
@@ -232,19 +236,30 @@ body{font-family:'Inter',sans-serif;background:#f8f9fa;}
 				<div class="h-px bg-outline-variant/20"></div>
 
 				<div>
-					<div class="flex items-center justify-between mb-4">
-						<p class="text-xs font-bold text-outline uppercase tracking-widest flex items-center gap-2"><span class="material-symbols-outlined text-sm">medication</span>Articles de la commande</p>
-						<button type="button" onclick="addItem()" class="flex items-center gap-1.5 text-primary text-xs font-bold hover:bg-primary/5 px-3 py-1.5 rounded-lg"><span class="material-symbols-outlined text-sm">add_circle</span>Ajouter un article</button>
+					<p class="text-xs font-bold text-outline uppercase tracking-widest mb-1 flex items-center gap-2"><span class="material-symbols-outlined text-sm">medication</span>Articles de la commande</p>
+					<p class="text-xs text-on-surface-variant mb-4">Recherchez et sélectionnez les articles. Le stock affiché ne sera pas modifié.</p>
+
+					<div class="relative mb-3">
+						<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
+						<input type="text" id="itemSearch" placeholder="Chercher un médicament..." oninput="filterItems(this.value)" autocomplete="off" class="w-full pl-10 pr-4 py-3 bg-surface-container-high border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none text-on-surface"/>
 					</div>
-					<div id="itemsContainer" class="space-y-3">
-						<div class="item-input-row flex gap-3 items-center p-3 bg-surface-container rounded-xl">
-							<span class="material-symbols-outlined text-outline text-lg">medication</span>
-							<input type="text" name="item_name[]" placeholder="Nom du médicament / article" required class="flex-1"/>
-							<div class="relative w-28 flex-shrink-0"><input type="number" name="item_qty[]" placeholder="Qté" min="1" value="1" required class="w-full text-center"/></div>
-							<button type="button" onclick="removeItem(this)" class="p-1.5 hover:bg-error-container hover:text-error rounded-lg text-on-surface-variant"><span class="material-symbols-outlined text-lg">remove_circle</span></button>
-						</div>
+
+					<div class="mb-2 flex items-center justify-between">
+						<p class="text-xs text-on-surface-variant">Tapez un nom pour afficher les articles correspondants.</p>
+						<span id="itemResultsCount" class="text-xs font-semibold text-primary"></span>
 					</div>
-					<p class="text-xs text-on-surface-variant mt-2 ml-1">Ajoutez tous les médicaments inclus dans cette commande.</p>
+
+					<div id="itemSuggestions" class="hidden mb-4 rounded-xl border border-outline-variant/20 bg-surface-container-lowest shadow-sm overflow-hidden"></div>
+
+					<div id="itemList" class="max-h-56 overflow-y-auto rounded-xl border border-outline-variant/20 divide-y divide-outline-variant/10 mb-4 bg-surface-container-lowest"></div>
+					</div>
+
+					<div>
+						<p class="text-xs font-bold text-on-surface-variant mb-2 flex items-center gap-1"><span class="material-symbols-outlined text-sm">check_circle</span>Articles sélectionnés : <span id="selectedCount" class="text-primary ml-1">0</span></p>
+						<div id="selectedItems" class="flex flex-wrap gap-2 min-h-[40px]"><p id="noItemMsg" class="text-xs text-outline italic">Aucun article sélectionné. Cliquez sur un article ci-dessus.</p></div>
+						<div id="hiddenItemInputs"></div>
+						<p id="selectedItemsError" class="hidden text-xs text-error mt-2 ml-1">Veuillez ajouter au moins un article à la commande.</p>
+					</div>
 				</div>
 
 				<div class="h-px bg-outline-variant/20"></div>
@@ -269,44 +284,51 @@ body{font-family:'Inter',sans-serif;background:#f8f9fa;}
 			</form>
 		</div>
 
-		<div id="assignModal" class="modal-backdrop">
-			<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
-				<div class="flex items-center justify-between mb-6">
-					<div><h2 class="font-extrabold text-xl">Assigner une Pharmacie</h2><p class="text-xs text-on-surface-variant mt-0.5">Commande : <strong id="assignOrderId"></strong></p></div>
-					<button onclick="closeAssignModal()" class="p-2 hover:bg-surface-container rounded-full"><span class="material-symbols-outlined">close</span></button>
-				</div>
-				<form method="POST" action="{{ route('stock.dashboard') }}" class="space-y-5">
-					@csrf
-					<input type="hidden" name="action" value="assign_pharmacy" />
-					<input type="hidden" name="order_id" id="assignOrderIdInput" />
-					<div class="space-y-2 max-h-72 overflow-y-auto pr-1" id="pharmacyRadioList">
-						@foreach ($pharmacies as $ph)
-							<label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer">
-								<input type="radio" name="pharmacy_id" value="{{ $ph['NIF'] ?? '' }}" class="accent-primary" />
-								<div class="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-container text-white flex items-center justify-center text-sm font-bold">{{ strtoupper(substr($ph['FirstName'] ?? '', 0, 1)) }}</div>
-								<div class="min-w-0"><p class="font-bold text-sm truncate">{{ $ph['FirstName'] ?? '' }} {{ $ph['LastName'] ?? '' }}</p><p class="text-xs text-on-surface-variant truncate">{{ $ph['Location'] ?? '' }}</p><p class="text-xs text-primary">{{ $ph['PhoneNumber'] ?? '' }}</p></div>
-								<span class="ml-auto text-xs font-bold text-outline">#{{ $ph['NIF'] ?? '' }}</span>
-							</label>
-						@endforeach
-						@if (empty($pharmacies))
-							<p class="text-sm text-center text-on-surface-variant py-6">Aucune pharmacie disponible.<br/><a href="{{ route('register.pharmacy') }}" class="text-primary font-semibold underline">Enregistrer une pharmacie</a></p>
-						@endif
-					</div>
-					<div class="flex gap-3 pt-2"><button type="button" onclick="closeAssignModal()" class="flex-1 px-5 py-3 border rounded-xl">Annuler</button><button type="submit" class="flex-1 bg-primary text-white px-5 py-3 rounded-xl">Confirmer</button></div>
-				</form>
-			</div>
-		</div>
-
-		<div id="detailsModal" class="modal-backdrop">
-			<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-				<div class="flex items-center justify-between px-7 pt-6 pb-4 border-b"><h2 class="font-extrabold text-xl">Détails de la commande</h2><div class="flex items-center gap-2"><button onclick="printOrderDetails()" class="px-3 py-2 bg-primary text-white rounded-xl">Imprimer</button><button onclick="closeDetailsModal()" class="p-2 hover:bg-surface-container rounded-full"><span class="material-symbols-outlined">close</span></button></div></div>
-				<div class="px-7 py-5 space-y-4" id="detailsBody"></div>
-			</div>
-		</div>
-
 		<div id="printArea" style="display:none;"></div>
 	</div>
 </main>
+
+	<div id="assignModal" class="modal-backdrop">
+		<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+			<div class="flex items-center justify-between mb-6">
+				<div><h2 class="font-extrabold text-xl">Assigner une Pharmacie</h2><p class="text-xs text-on-surface-variant mt-0.5">Commande : <strong id="assignOrderId"></strong></p></div>
+				<button onclick="closeAssignModal()" class="p-2 hover:bg-surface-container rounded-full"><span class="material-symbols-outlined">close</span></button>
+			</div>
+			<form method="POST" action="{{ route('stock.dashboard') }}" class="space-y-5">
+				@csrf
+				<input type="hidden" name="action" value="assign_pharmacy" />
+				<input type="hidden" name="order_id" id="assignOrderIdInput" />
+				<div>
+					<p class="text-xs font-semibold text-on-surface-variant mb-1.5 ml-1">Pharmacies existantes</p>
+					<div class="space-y-2 max-h-72 overflow-y-auto pr-1" id="pharmacyRadioList">
+						@foreach ($pharmacies as $ph)
+							<label class="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/20 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/8">
+								<input type="radio" name="pharmacy_id" value="{{ $ph['NIF'] ?? '' }}" class="accent-primary" required />
+								<div class="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-container text-white flex items-center justify-center text-sm font-bold flex-shrink-0">{{ strtoupper(substr($ph['FirstName'] ?? '', 0, 1)) }}</div>
+								<div class="min-w-0 flex-1">
+									<p class="font-bold text-sm truncate text-on-surface">{{ $ph['FirstName'] ?? '' }} {{ $ph['LastName'] ?? '' }}</p>
+									<p class="text-xs text-on-surface-variant truncate">{{ $ph['Location'] ?? '' }}</p>
+									<p class="text-xs text-primary truncate">{{ $ph['PhoneNumber'] ?? '' }}</p>
+								</div>
+								<span class="ml-auto text-xs font-bold text-outline flex-shrink-0">#{{ $ph['NIF'] ?? '' }}</span>
+							</label>
+						@endforeach
+					</div>
+					@if (empty($pharmacies))
+						<p class="text-sm text-center text-on-surface-variant py-4">Aucune pharmacie disponible.<br/><a href="{{ route('register.pharmacy') }}" class="text-primary font-semibold underline">Enregistrer une pharmacie</a></p>
+					@endif
+				</div>
+				<div class="flex gap-3 pt-2"><button type="button" onclick="closeAssignModal()" class="flex-1 px-5 py-3 border rounded-xl">Annuler</button><button type="submit" class="flex-1 bg-primary text-white px-5 py-3 rounded-xl">Confirmer</button></div>
+			</form>
+		</div>
+	</div>
+
+	<div id="detailsModal" class="modal-backdrop">
+		<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+			<div class="flex items-center justify-between px-7 pt-6 pb-4 border-b"><h2 class="font-extrabold text-xl">Détails de la commande</h2><div class="flex items-center gap-2"><button onclick="printOrderDetails()" class="px-3 py-2 bg-primary text-white rounded-xl">Imprimer</button><button onclick="closeDetailsModal()" class="p-2 hover:bg-surface-container rounded-full"><span class="material-symbols-outlined">close</span></button></div></div>
+			<div class="px-7 py-5 space-y-4" id="detailsBody"></div>
+		</div>
+	</div>
 
 <style>
 @media print {
@@ -318,6 +340,12 @@ body{font-family:'Inter',sans-serif;background:#f8f9fa;}
 <div id="printOverlay" style="display:none; position:fixed; inset:0; background:white; z-index:9999; padding:40px; font-family:'Inter',sans-serif;"></div>
 
 <script>
+const stockArticles = (@json($db_items ?? []) || []).map((item) => ({
+	id: item.id ?? item.ID ?? 0,
+	name: item.name ?? item.Name ?? '',
+	contiti: item.contiti ?? item.Contiti ?? 0,
+}));
+
 function switchTab(tab) {
 	document.getElementById('tab-list').classList.toggle('hidden', tab !== 'list');
 	document.getElementById('tab-create').classList.toggle('hidden', tab !== 'create');
@@ -325,21 +353,142 @@ function switchTab(tab) {
 	document.getElementById('tab-create-btn').classList.toggle('active', tab === 'create');
 }
 
-function addItem() {
-	const container = document.getElementById('itemsContainer');
-	const row = document.createElement('div');
-	row.className = 'item-input-row flex gap-3 items-center p-3 bg-surface-container rounded-xl';
-	row.innerHTML = `
-		<span class="material-symbols-outlined text-outline text-lg flex-shrink-0" style="font-variation-settings:'FILL' 1;">medication</span>
-		<input type="text" name="item_name[]" placeholder="Nom du médicament / article" required class="flex-1"/>
-		<div class="relative w-28 flex-shrink-0"><input type="number" name="item_qty[]" placeholder="Qté" min="1" value="1" required class="w-full text-center"/></div>
-		<button type="button" onclick="removeItem(this)" class="p-1.5 hover:bg-error-container hover:text-error rounded-lg text-on-surface-variant"><span class="material-symbols-outlined text-lg">remove_circle</span></button>
-	`;
-	container.appendChild(row);
+const selectedItems = {};
+
+function escapeHtml(value) {
+	return String(value)
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;');
 }
-function removeItem(btn) {
-	const rows = document.querySelectorAll('.item-input-row');
-	if (rows.length > 1) btn.closest('.item-input-row').remove();
+
+function filterItems(query) {
+	const q = (query || '').toLowerCase().trim();
+	renderItemResults(q);
+}
+
+function renderItemResults(query) {
+	const list = document.getElementById('itemList');
+	const count = document.getElementById('itemResultsCount');
+	const suggestions = document.getElementById('itemSuggestions');
+	const matches = stockArticles.filter((item) => !query || String(item.name || '').toLowerCase().includes(query));
+
+	count.textContent = query ? `${matches.length} résultat${matches.length > 1 ? 's' : ''}` : `${stockArticles.length} article${stockArticles.length > 1 ? 's' : ''}`;
+
+	if (matches.length === 0) {
+		suggestions.classList.add('hidden');
+		suggestions.innerHTML = '';
+		list.innerHTML = '<div class="px-4 py-6 text-center text-sm text-on-surface-variant">Aucun article correspondant.</div>';
+		return;
+	}
+
+	const suggestionRows = matches.slice(0, 8).map((item) => {
+		const id = Number(item.id || 0);
+		const name = escapeHtml(item.name || '');
+		const stock = Number(item.contiti || 0);
+		return `<button type="button" class="item-db-row flex w-full items-center justify-between px-4 py-3 cursor-pointer transition-colors text-left" onclick="selectItem(${id}, ${JSON.stringify(item.name || '')}, ${stock})">
+			<div class="flex items-center gap-3 min-w-0">
+				<span class="material-symbols-outlined text-primary text-base" style="font-variation-settings:'FILL' 1;">medication</span>
+				<span class="text-sm font-semibold text-on-surface truncate">${name}</span>
+			</div>
+			<span class="text-xs font-bold text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-full flex-shrink-0">Stock: ${stock}</span>
+		</button>`;
+	}).join('');
+
+	suggestions.innerHTML = `<div class="px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">Suggestions</div><div class="divide-y divide-outline-variant/10">${suggestionRows}</div>`;
+	suggestions.classList.remove('hidden');
+
+	list.innerHTML = matches.map((item) => {
+		const id = Number(item.id || 0);
+		const name = escapeHtml(item.name || '');
+		const stock = Number(item.contiti || 0);
+		const selected = selectedItems[id] ? ' selected' : '';
+		return `<button type="button" class="item-db-row${selected} flex w-full items-center justify-between px-4 py-3 cursor-pointer transition-colors text-left" onclick="selectItem(${id}, ${JSON.stringify(item.name || '')}, ${stock})">
+			<div class="flex items-center gap-3 min-w-0">
+				<span class="material-symbols-outlined text-primary text-base" style="font-variation-settings:'FILL' 1;">medication</span>
+				<span class="text-sm font-semibold text-on-surface truncate">${name}</span>
+			</div>
+			<span class="text-xs font-bold text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-full flex-shrink-0">Stock: ${stock}</span>
+		</button>`;
+	}).join('');
+
+	list.classList.toggle('hidden', !!query);
+}
+
+function selectItem(id, name, contiti) {
+	if (!id || selectedItems[id]) return;
+	selectedItems[id] = { id, name, contiti, qty: Math.max(1, parseInt(contiti, 10) || 1) };
+	renderSelectedItems();
+}
+
+function deselectItem(id) {
+	delete selectedItems[id];
+	renderSelectedItems();
+}
+
+function updateQty(id, val) {
+	if (!selectedItems[id]) return;
+	selectedItems[id].qty = Math.max(1, parseInt(val, 10) || 1);
+	const hidden = document.getElementById('qty-hidden-' + id);
+	if (hidden) hidden.value = selectedItems[id].qty;
+}
+
+function renderSelectedItems() {
+	const chips = document.getElementById('selectedItems');
+	const hidden = document.getElementById('hiddenItemInputs');
+	const count = document.getElementById('selectedCount');
+	const noMsg = document.getElementById('noItemMsg');
+	const ids = Object.keys(selectedItems);
+
+	count.textContent = ids.length;
+
+	Array.from(chips.children).forEach((child) => {
+		if (child.id !== 'noItemMsg') child.remove();
+	});
+
+	if (ids.length === 0) {
+		noMsg.style.display = '';
+	} else {
+		noMsg.style.display = 'none';
+		ids.forEach((id) => {
+			const item = selectedItems[id];
+			const chip = document.createElement('div');
+			chip.id = 'chip-' + id;
+			chip.className = 'flex items-center gap-2 bg-primary/10 border border-primary/20 px-3 py-2 rounded-xl text-xs font-bold';
+			chip.innerHTML = `
+				<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings:'FILL' 1;">medication</span>
+				<span class="text-primary">${escapeHtml(item.name)}</span>
+				<div class="flex items-center gap-1 bg-white rounded-lg px-2 py-1 border border-primary/20">
+					<span class="text-[10px] text-on-surface-variant font-semibold">Qté:</span>
+					<input type="number" min="1" value="${item.qty}" onchange="updateQty(${id}, this.value)" oninput="updateQty(${id}, this.value)" class="w-12 text-center text-sm font-bold text-primary border-none outline-none bg-transparent"/>
+				</div>
+				<button type="button" onclick="deselectItem(${id})" class="ml-1 text-on-surface-variant hover:text-error transition-colors">
+					<span class="material-symbols-outlined text-sm">close</span>
+				</button>`;
+			chips.appendChild(chip);
+		});
+	}
+
+	hidden.innerHTML = ids.map((id) => {
+		const item = selectedItems[id];
+		return `<input type="hidden" name="items[${id}][orderitem_id]" value="${item.id}" />
+			<input type="hidden" name="items[${id}][contiti]" id="qty-hidden-${id}" value="${item.qty}" />`;
+	}).join('');
+
+	document.querySelectorAll('.item-db-row').forEach((row) => {
+		const match = row.getAttribute('onclick')?.match(/selectItem\((\d+)/);
+		const rowId = match ? match[1] : null;
+		row.classList.toggle('selected', !!(rowId && selectedItems[rowId]));
+	});
+}
+
+function validateSelectedItems() {
+	const error = document.getElementById('selectedItemsError');
+	const valid = Object.keys(selectedItems).length > 0;
+	error.classList.toggle('hidden', valid);
+	return valid;
 }
 
 function openAssignModal(orderId) {
@@ -372,7 +521,10 @@ function openDetailsModal(order) {
 function closeDetailsModal() { document.getElementById('detailsModal').classList.remove('open'); }
 document.getElementById('detailsModal').addEventListener('click', function(e){ if (e.target === this) closeDetailsModal(); });
 function printOrderDetails() { window.print(); }
-if (new URLSearchParams(location.search).get('tab') === 'create') switchTab('create');
+if (new URLSearchParams(location.search).get('tab') === 'create' || new URLSearchParams(location.search).get('section') === 'create') switchTab('create');
+renderItemResults('');
+renderSelectedItems();
 </script>
 </body>
 </html>
+ 

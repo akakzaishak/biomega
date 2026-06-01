@@ -58,3 +58,4 @@ class RegisterPharmacyTest extends TestCase
         $response->assertSessionHas('success');
     }
 }
+ 

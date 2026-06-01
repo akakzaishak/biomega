@@ -204,4 +204,4 @@
     });
     function filterTable(role){ document.querySelectorAll('.filter-btn').forEach(btn=>btn.classList.toggle('active-filter', btn.dataset.filter===role)); document.querySelectorAll('.employee-row').forEach(row=>row.style.display=(role==='all'||row.dataset.role===role)?'':'none'); }
     function toggleModalConfirm(){ const input=document.getElementById('modalConfirm'); const icon=document.getElementById('modalConfirmEyeIcon'); input.type = input.type==='password' ? 'text' : 'password'; icon.textContent = input.type==='password' ? 'visibility' : 'visibility_off'; }
-</script>
+</script> 

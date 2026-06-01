@@ -56,4 +56,4 @@ class AdminOrderDeleteTest extends TestCase
         $this->assertDatabaseMissing('asined_order', ['order_id' => 'ORD-DEL-1']);
         $this->assertDatabaseMissing('payment', ['order_id' => 'ORD-DEL-1']);
     }
-}
+} 

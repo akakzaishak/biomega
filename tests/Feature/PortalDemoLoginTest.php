@@ -26,3 +26,4 @@ class PortalDemoLoginTest extends TestCase
         $response->assertSessionHasErrors(['phone', 'password']);
     }
 }
+ 

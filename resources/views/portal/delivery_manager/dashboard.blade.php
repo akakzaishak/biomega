@@ -7,6 +7,7 @@
     $notDelivered = $notDelivered ?? count(array_filter($orders, fn ($o) => (int) ($o['Status'] ?? 0) === 0));
     $assigned = $assigned ?? count(array_filter($orders, fn ($o) => !empty($o['deliveryperson_id'])));
     $unassigned = $unassigned ?? ($totalOrders - $assigned);
+    $proofCount = $proofCount ?? 0;
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -92,7 +93,12 @@
   </div>
   <div class="flex items-center gap-3">
     <span class="hidden sm:block text-sm font-semibold text-on-surface-variant">{{ $managerName }}</span>
-    <button class="p-2 hover:bg-slate-50 rounded-full transition-colors"><span class="material-symbols-outlined text-slate-600">notifications</span></button>
+    <button class="relative p-2 hover:bg-slate-50 rounded-full transition-colors">
+      <span class="material-symbols-outlined text-slate-600">notifications</span>
+      @if (!empty($proofCount))
+      <span class="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600 text-[10px] font-bold text-white">{{ $proofCount }}</span>
+      @endif
+    </button>
     <a href="{{ route('logout') }}" class="p-2 hover:bg-slate-50 rounded-full transition-colors" title="Logout"><span class="material-symbols-outlined text-slate-600">logout</span></a>
   </div>
 </header>
@@ -158,6 +164,7 @@
               <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-on-surface-variant/70">Status</th>
               <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-on-surface-variant/70">Pharmacy</th>
               <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-on-surface-variant/70">Assigned To</th>
+              <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-on-surface-variant/70">Proof</th>
               <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-on-surface-variant/70">Urgent</th>
               <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-wider text-on-surface-variant/70">Actions</th>
             </tr>
@@ -187,6 +194,7 @@
               <td class="px-5 py-4">@if ($isDelivered)<span class="inline-flex items-center gap-1 text-[11px] font-black bg-tertiary/10 text-tertiary px-2.5 py-1 rounded-full uppercase"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Delivered</span>@else<span class="inline-flex items-center gap-1 text-[11px] font-black bg-orange-100 text-orange-600 px-2.5 py-1 rounded-full uppercase"><span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>No Delivery</span>@endif</td>
               <td class="px-5 py-4">@if (!empty($ord['ph_first']))<div class="flex items-center gap-2"><span class="material-symbols-outlined text-tertiary text-base" style="font-variation-settings:'FILL' 1;">local_pharmacy</span><div><p class="font-semibold text-on-surface text-xs">{{ $ord['ph_first'] . ' ' . $ord['ph_last'] }}</p>@if (!empty($ord['ph_loc']))<p class="text-[10px] text-on-surface-variant truncate max-w-[120px]">{{ $ord['ph_loc'] }}</p>@endif</div></div>@else<span class="inline-flex items-center gap-1 text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⚠ Not assigned</span>@endif</td>
               <td class="px-5 py-4">@if ($isAssigned)<div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{{ strtoupper(substr((string) ($ord['dp_first'] ?? ''),0,1) . substr((string) ($ord['dp_last'] ?? ''),0,1)) }}</div><span class="font-semibold text-on-surface text-xs">{{ $dpName }}</span></div>@else<span class="text-xs text-on-surface-variant italic">Not assigned</span>@endif</td>
+              <td class="px-5 py-4">@if (!empty($ord['proof']))<a href="{{ asset($ord['proof']) }}" target="_blank" class="inline-flex items-center gap-1 text-xs font-semibold text-primary underline">Voir preuve</a>@else<span class="text-xs text-on-surface-variant">—</span>@endif</td>
               <td class="px-5 py-4">@if ($isUrgent)<span class="material-symbols-outlined text-error text-xl" style="font-variation-settings:'FILL' 1;">priority_high</span>@else<span class="text-outline text-xs">—</span>@endif</td>
               <td class="px-5 py-4 text-right"><button onclick="openAssignModal(@js($ord['Tracking']), @js($ord['assigned_pharmacy'] ?? ''), @js($ord['deliveryperson_id'] ?? ''))" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90 active:scale-95 transition-all"><span class="material-symbols-outlined text-sm">assignment_ind</span>{{ $isAssigned ? 'Reassign' : 'Assign' }}</button></td>
             </tr>
@@ -306,3 +314,4 @@
 </body>
 </html>
 
+ 

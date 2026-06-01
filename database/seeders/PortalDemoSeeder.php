@@ -95,12 +95,23 @@ class PortalDemoSeeder extends Seeder
             ]
         );
 
-        DB::table('orderitem')->updateOrInsert(
-            ['Name' => 'Demo Medicine'],
-            [
-                'contiti' => 12,
-            ]
-        );
+        $demoItems = [
+            ['Name' => 'Paracetamol 500mg', 'contiti' => 24],
+            ['Name' => 'Amoxicillin 1g', 'contiti' => 18],
+            ['Name' => 'Ibuprofen 400mg', 'contiti' => 30],
+            ['Name' => 'Vitamin C 1000mg', 'contiti' => 40],
+            ['Name' => 'Saline Solution', 'contiti' => 15],
+            ['Name' => 'Cough Syrup', 'contiti' => 22],
+            ['Name' => 'Antiseptic Cream', 'contiti' => 16],
+            ['Name' => 'Thermometer', 'contiti' => 10],
+        ];
+
+        foreach ($demoItems as $item) {
+            DB::table('orderitem')->updateOrInsert(
+                ['Name' => $item['Name']],
+                ['contiti' => $item['contiti']]
+            );
+        }
 
         DB::table('payment')->updateOrInsert(
             ['payment_id' => 1],
@@ -113,3 +124,4 @@ class PortalDemoSeeder extends Seeder
         );
     }
 } 
+ 

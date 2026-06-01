@@ -667,6 +667,7 @@ class PortalController extends Controller
                 'o.*',
                 'a.deliveryperson_id',
                 DB::raw('a.pharmacy_id AS assigned_pharmacy'),
+                DB::raw('"o"."ProofImage" AS "proof"'),
                 DB::raw('"d"."FirstName" AS dp_first'),
                 DB::raw('"d"."LastName" AS dp_last'),
                 DB::raw('"p"."FirstName" AS ph_first'),
@@ -688,6 +689,7 @@ class PortalController extends Controller
         $notDelivered = count(array_filter($orders, static fn (array $order) => (int) ($order['Status'] ?? 0) === 0));
         $assigned = count(array_filter($orders, static fn (array $order) => !empty($order['deliveryperson_id'])));
         $unassigned = $totalOrders - $assigned;
+        $proofCount = count(array_filter($orders, static fn (array $order) => !empty($order['proof'])));
 
         return view('portal.delivery_manager.dashboard', [
             'managerName' => $managerName,
@@ -700,6 +702,7 @@ class PortalController extends Controller
             'notDelivered' => $notDelivered,
             'assigned' => $assigned,
             'unassigned' => $unassigned,
+            'proofCount' => $proofCount,
         ]);
     }
 
@@ -766,22 +769,39 @@ class PortalController extends Controller
                     $proofPath = '';
                     $proofData = (string) $request->input('proof_image_data', '');
 
-                    if ($proofData !== '') {
-                        $data = preg_replace('/^data:image\/\w+;base64,/', '', $proofData);
-                        $decoded = base64_decode((string) $data, true);
-
-                        if ($decoded !== false) {
-                            $uploadDir = public_path('uploads/proofs');
-
-                            if (!is_dir($uploadDir)) {
-                                mkdir($uploadDir, 0755, true);
-                            }
-
-                            $filename = 'proof_' . $tracking . '_' . time() . '.jpg';
-                            file_put_contents($uploadDir . DIRECTORY_SEPARATOR . $filename, $decoded);
-                            $proofPath = 'uploads/proofs/' . $filename;
-                        }
+                    if ($proofData === '') {
+                        return redirect()->route('delivery-person.dashboard', [
+                            'flash' => "Veuillez fournir une photo de preuve pour la livraison #{$tracking}.",
+                            'type' => 'error',
+                        ]);
                     }
+
+                    $data = preg_replace('/^data:image\/\w+;base64,/', '', $proofData);
+                    $decoded = base64_decode((string) $data, true);
+
+                    if ($decoded === false || $decoded === '') {
+                        return redirect()->route('delivery-person.dashboard', [
+                            'flash' => "Image de preuve invalide pour la livraison #{$tracking}.",
+                            'type' => 'error',
+                        ]);
+                    }
+
+                    $uploadDir = public_path('uploads/proofs');
+
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+
+                    $filename = 'proof_' . $tracking . '_' . time() . '.jpg';
+                    $saved = file_put_contents($uploadDir . DIRECTORY_SEPARATOR . $filename, $decoded);
+                    if ($saved === false) {
+                        return redirect()->route('delivery-person.dashboard', [
+                            'flash' => "Impossible d'enregistrer la photo de preuve pour la livraison #{$tracking}.",
+                            'type' => 'error',
+                        ]);
+                    }
+
+                    $proofPath = 'uploads/proofs/' . $filename;
 
                     DB::table('order')
                         ->where('Tracking', $tracking)
@@ -1024,6 +1044,27 @@ class PortalController extends Controller
         // (array_merge order preserved above)
     }
 
+    /**
+     * Pharmacy-facing live tracking page. Reuses the delivery manager tracking
+     * view but scopes the data to drivers who have orders for the current
+     * pharmacy (so the map doesn't show unrelated deliveries).
+     */
+    public function pharmacyTracking(Request $request)
+    {
+        if ($redirect = $this->requireRole('pharmacy')) return $redirect;
+
+        $nif = (string) (session('user_id') ?: '');
+        $data = $this->portal->trackingDashboardDataForPharmacy($nif);
+
+        // Use the same tracking view; present pharmacy name in header
+        return view('portal.delivery_manager.tracking', array_merge([
+            'managerName' => $this->userName('Pharmacy'),
+            'embedded' => false,
+            'forcedMsg' => null,
+            'isPharmacy' => true,
+        ], $data));
+    }
+
     public function stockDashboard(Request $request)
     {
         if ($redirect = $this->requireRole('stockemployee')) return $redirect;
@@ -1053,6 +1094,9 @@ class PortalController extends Controller
                 'amount' => ['nullable', 'integer', 'min:1'],
                 'package_number' => ['required', 'integer', 'min:1'],
                 'total_amount' => ['nullable', 'integer', 'min:1'],
+                'items' => ['nullable', 'array', 'min:1'],
+                'items.*.orderitem_id' => ['required', 'integer', 'min:1'],
+                'items.*.contiti' => ['required', 'integer', 'min:1'],
                 'item_name' => ['nullable', 'array', 'min:1'],
                 'item_name.*' => ['nullable', 'string'],
                 'item_qty' => ['nullable', 'array', 'min:1'],
@@ -1061,7 +1105,7 @@ class PortalController extends Controller
                 'is_urgent' => ['nullable'],
             ]);
 
-            if (empty($data['medicine_name']) && empty($data['item_name'])) {
+            if (empty($data['medicine_name']) && empty($data['item_name']) && empty($data['items'])) {
                 return back()->withInput()->with('error', 'Please add at least one item to the order.');
             }
 
@@ -1079,3 +1123,4 @@ class PortalController extends Controller
         ], $this->portal->stockDashboard()));
     }
 }
+ 
